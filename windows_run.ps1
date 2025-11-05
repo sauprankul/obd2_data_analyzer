@@ -34,14 +34,14 @@ try {
     exit 1
 }
 
-# Add src to Python path and run the Dash viewer
+# Add src to Python path and run the working Dash viewer
 Write-Host "Starting OBD Data Viewer..." -ForegroundColor Blue
-Write-Host "This will open in your web browser at http://localhost:8050" -ForegroundColor Yellow
+Write-Host "This will open in your web browser at http://localhost:8052" -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    python src\dash_viewer.py
+    python src\working_viewer.py
 } catch {
     Write-Host "Error running the viewer" -ForegroundColor Red
     Read-Host "Press Enter to exit"
