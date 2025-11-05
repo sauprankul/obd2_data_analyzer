@@ -143,22 +143,103 @@ class FullFeaturedOBDViewer:
         self.reset_zoom_btn.pack(side=tk.LEFT, padx=2)
         
     def setup_scrollbar(self):
-        """Setup the time scrollbar."""
-        scrollbar_frame = ttk.Frame(self.root)
-        scrollbar_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
+        """Setup time navigation controls."""
+        nav_frame = ttk.Frame(self.root)
+        nav_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
         
-        # Use Scale widget instead of Scrollbar for better control
-        self.time_scrollbar = ttk.Scale(
-            scrollbar_frame, 
-            orient=tk.HORIZONTAL,
-            from_=0,
-            to=100,
-            command=self.on_scrollbar_change
+        # Left navigation buttons
+        left_frame = ttk.Frame(nav_frame)
+        left_frame.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(left_frame, text="←", font=("Arial", 12, "bold")).pack()
+        
+        self.left_buttons = {}
+        left_times = [-1800, -60, -30, -10, -5, -3, -1]  # Reversed order: -30m, -1m, -30s, -10s, -5s, -3s, -1s
+        
+        for seconds in left_times:
+            if seconds >= 60:
+                label = f"-{abs(seconds)//60}m"
+            else:
+                label = f"-{abs(seconds)}s"
+            
+            btn = ttk.Button(
+                left_frame, 
+                text=label, 
+                width=4,
+                command=lambda s=seconds: self.shift_time(s)
+            )
+            btn.pack(side=tk.LEFT, padx=1)
+            self.left_buttons[seconds] = btn
+        
+        # Center time entry
+        center_frame = ttk.Frame(nav_frame)
+        center_frame.pack(side=tk.LEFT, padx=20)
+        
+        ttk.Label(center_frame, text="Center Time:").pack()
+        self.center_time_var = tk.StringVar()
+        self.center_time_entry = ttk.Entry(
+            center_frame, 
+            textvariable=self.center_time_var, 
+            width=10
         )
-        self.time_scrollbar.pack(fill=tk.X)
+        self.center_time_entry.pack()
+        self.center_time_entry.bind('<Return>', self.on_center_time_change)
+        self.center_time_entry.bind('<FocusOut>', self.on_center_time_change)
         
-        self.time_label = ttk.Label(scrollbar_frame, text="Time Range: 0.00 - 0.00")
-        self.time_label.pack()
+        # Right navigation buttons
+        right_frame = ttk.Frame(nav_frame)
+        right_frame.pack(side=tk.LEFT, padx=5)
+        
+        ttk.Label(right_frame, text="→", font=("Arial", 12, "bold")).pack()
+        
+        self.right_buttons = {}
+        right_times = [1, 3, 5, 10, 30, 60, 1800]  # seconds
+        
+        for seconds in right_times:
+            if seconds >= 60:
+                label = f"+{seconds//60}m"
+            else:
+                label = f"+{seconds}s"
+            
+            btn = ttk.Button(
+                right_frame, 
+                text=label, 
+                width=4,
+                command=lambda s=seconds: self.shift_time(s)
+            )
+            btn.pack(side=tk.LEFT, padx=1)
+            self.right_buttons[seconds] = btn
+        
+        # Time range text boxes
+        range_frame = ttk.Frame(nav_frame)
+        range_frame.pack(side=tk.LEFT, padx=20)
+        
+        ttk.Label(range_frame, text="Time Range:").pack()
+        
+        range_entry_frame = ttk.Frame(range_frame)
+        range_entry_frame.pack()
+        
+        ttk.Label(range_entry_frame, text="Start:").pack(side=tk.LEFT)
+        self.start_time_var = tk.StringVar()
+        self.start_time_entry = ttk.Entry(
+            range_entry_frame, 
+            textvariable=self.start_time_var, 
+            width=8
+        )
+        self.start_time_entry.pack(side=tk.LEFT, padx=2)
+        self.start_time_entry.bind('<Return>', self.on_time_range_change)
+        self.start_time_entry.bind('<FocusOut>', self.on_time_range_change)
+        
+        ttk.Label(range_entry_frame, text="End:").pack(side=tk.LEFT, padx=(10, 0))
+        self.end_time_var = tk.StringVar()
+        self.end_time_entry = ttk.Entry(
+            range_entry_frame, 
+            textvariable=self.end_time_var, 
+            width=8
+        )
+        self.end_time_entry.pack(side=tk.LEFT, padx=2)
+        self.end_time_entry.bind('<Return>', self.on_time_range_change)
+        self.end_time_entry.bind('<FocusOut>', self.on_time_range_change)
         
     def load_data(self, folder_path=None):
         """Load data from specified folder."""
@@ -299,42 +380,154 @@ class FullFeaturedOBDViewer:
             self.current_end = self.max_time
             self.zoom_level = 1.0
             
-            # Initialize scale
-            self.time_scrollbar.config(from_=0, to=100)
-            self.time_scrollbar.set(0)
-            
-            self.update_time_label()
+            self.update_time_display()
+            self.update_center_time()
+            self.update_nav_buttons()
             self.update_zoom_buttons()
             
-    def update_time_label(self):
-        """Update time label."""
-        self.time_label.config(
-            text=f"Time Range: {self.current_start:.2f} - {self.current_end:.2f}"
-        )
+    def update_time_display(self):
+        """Update time range display."""
+        self.start_time_var.set(f"{int(round(self.current_start))}")
+        self.end_time_var.set(f"{int(round(self.current_end))}")
         
-    def on_scrollbar_change(self, value):
-        """Handle scrollbar change."""
+    def update_center_time(self):
+        """Update center time display."""
+        if self.data:
+            center = (self.current_start + self.current_end) / 2
+            self.center_time_var.set(f"{int(round(center))}")
+            
+    def on_center_time_change(self, event=None):
+        """Handle center time entry change."""
         if not self.data:
             return
             
-        # Scale widget passes value as string
-        scroll_pos = float(value)
+        try:
+            new_center = int(self.center_time_var.get())
+            window_size = self.current_end - self.current_start
+            
+            # Calculate new start/end based on center
+            self.current_start = new_center - window_size / 2
+            self.current_end = new_center + window_size / 2
+            
+            # Keep within bounds (round bounds to int)
+            min_int = int(round(self.min_time))
+            max_int = int(round(self.max_time))
+            
+            if self.current_start < min_int:
+                self.current_start = min_int
+                self.current_end = min_int + window_size
+            elif self.current_end > max_int:
+                self.current_end = max_int
+                self.current_start = max_int - window_size
+                
+            self.update_time_display()
+            self.update_center_time()
+            self.update_nav_buttons()
+            self.refresh_plot()
+            
+        except ValueError:
+            # Invalid input, reset to current center
+            self.update_center_time()
+            
+    def on_time_range_change(self, event=None):
+        """Handle time range entry change."""
+        if not self.data:
+            return
+            
+        try:
+            new_start = int(self.start_time_var.get())
+            new_end = int(self.end_time_var.get())
+            
+            # Validate range
+            if new_start >= new_end:
+                # Invalid range, reset to current
+                self.update_time_display()
+                return
+                
+            # Keep within bounds (round bounds to int)
+            min_int = int(round(self.min_time))
+            max_int = int(round(self.max_time))
+            
+            if new_start < min_int:
+                new_start = min_int
+            if new_end > max_int:
+                new_end = max_int
+                
+            self.current_start = new_start
+            self.current_end = new_end
+            
+            # Update zoom level based on new window size
+            total_range = self.max_time - self.min_time
+            window_size = new_end - new_start
+            if window_size > 0:
+                self.zoom_level = total_range / window_size
+            
+            self.update_time_display()
+            self.update_center_time()
+            self.update_nav_buttons()
+            self.update_zoom_buttons()
+            self.refresh_plot()
+            
+        except ValueError:
+            # Invalid input, reset to current values
+            self.update_time_display()
+            
+    def shift_time(self, seconds):
+        """Shift time window by specified seconds."""
+        if not self.data:
+            return
+            
+        window_size = self.current_end - self.current_start
         
-        # Calculate window size based on zoom
-        total_range = self.max_time - self.min_time
-        window_size = total_range / self.zoom_level
+        # Calculate new center
+        current_center = (self.current_start + self.current_end) / 2
+        new_center = current_center + seconds
         
-        # Calculate new time range
-        max_scroll_pos = 100 - (window_size / total_range * 100)
-        actual_pos = min(scroll_pos, max_scroll_pos)
+        # Calculate new window bounds
+        self.current_start = new_center - window_size / 2
+        self.current_end = new_center + window_size / 2
         
-        self.current_start = self.min_time + (actual_pos / 100.0) * total_range
-        self.current_end = self.current_start + window_size
-        
-        self.update_time_label()
-        self.update_zoom_buttons()
+        # Keep within bounds
+        if self.current_start < self.min_time:
+            self.current_start = self.min_time
+            self.current_end = self.min_time + window_size
+        elif self.current_end > self.max_time:
+            self.current_end = self.max_time
+            self.current_start = self.max_time - window_size
+            
+        self.update_time_display()
+        self.update_center_time()
+        self.update_nav_buttons()
         self.refresh_plot()
         
+    def update_nav_buttons(self):
+        """Update navigation button states."""
+        if not self.data:
+            for btn in self.left_buttons.values():
+                btn.config(state='disabled')
+            for btn in self.right_buttons.values():
+                btn.config(state='disabled')
+            return
+            
+        current_center = (self.current_start + self.current_end) / 2
+        window_size = self.current_end - self.current_start
+        
+        # Update left buttons (can't go past min_time)
+        for seconds, btn in self.left_buttons.items():
+            min_center = self.min_time + window_size / 2
+            if current_center - abs(seconds) < min_center:
+                btn.config(state='disabled')
+            else:
+                btn.config(state='normal')
+                
+        # Update right buttons (can't go past max_time)
+        for seconds, btn in self.right_buttons.items():
+            max_center = self.max_time - window_size / 2
+            if current_center + seconds > max_center:
+                btn.config(state='disabled')
+            else:
+                btn.config(state='normal')
+            
     def update_zoom_buttons(self):
         """Update zoom button states based on current zoom level."""
         if not self.data:
@@ -410,8 +603,9 @@ class FullFeaturedOBDViewer:
         self.zoom_level = 1.0
         self.current_start = self.min_time
         self.current_end = self.max_time
-        self.time_scrollbar.set(0)
-        self.update_time_label()
+        self.update_time_display()
+        self.update_center_time()
+        self.update_nav_buttons()
         self.update_zoom_buttons()
         self.refresh_plot()
         
@@ -441,11 +635,9 @@ class FullFeaturedOBDViewer:
             self.current_end = self.max_time
             self.current_start = self.max_time - window_size
             
-        # Update scale position
-        scroll_pos = ((self.current_start - self.min_time) / total_range) * 100
-        self.time_scrollbar.set(scroll_pos)
-        
-        self.update_time_label()
+        self.update_time_display()
+        self.update_center_time()
+        self.update_nav_buttons()
         self.update_zoom_buttons()
         self.refresh_plot()
         
