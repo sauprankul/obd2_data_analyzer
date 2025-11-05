@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-OBD Data Viewer using Plotly Dash for fully integrated web interface
+Enhanced OBD Data Viewer using Plotly Dash with groups and improved controls
 """
 
 import dash
@@ -23,8 +23,8 @@ import json
 # Configure Plotly to use a static renderer that works well with Tkinter
 pio.kaleido.scope.mathjax = None
 
-class DashOBDViewer:
-    """OBD Data Viewer using Plotly Dash for integrated web interface."""
+class EnhancedDashOBDViewer:
+    """Enhanced OBD Data Viewer with groups and improved controls."""
     
     def __init__(self, csv_folder_path=None):
         """
@@ -139,7 +139,7 @@ class DashOBDViewer:
             # Header
             dbc.Row([
                 dbc.Col([
-                    html.H1("OBD Data Viewer", className="text-center mb-4"),
+                    html.H1("OBD Data Viewer - Enhanced", className="text-center mb-4"),
                     html.Hr()
                 ])
             ]),
@@ -208,7 +208,29 @@ class DashOBDViewer:
             dcc.Store(id='time-range-store', data=[self.current_start, self.current_end]),
             dcc.Store(id='graph-zoom-store', data=self.global_zoom_level),
             dcc.Store(id='groups-store', data=self.groups),
-            dcc.Store(id='pid-groups-store', data=self.pid_groups)
+            dcc.Store(id='pid-groups-store', data=self.pid_groups),
+            
+            # Initialize the containers with initial data
+            dcc.Store(id='initial-data-loaded', data=True),
+            
+            # Modal for adding PIDs to groups
+            dbc.Modal([
+                dbc.ModalHeader("Add PID to Group"),
+                dbc.ModalBody([
+                    html.Label("Select Group:"),
+                    dcc.Dropdown(id='group-dropdown'),
+                    html.Hr(),
+                    html.Label("PID:"),
+                    html.Div(id='modal-pid-name')
+                ]),
+                dbc.ModalFooter([
+                    dbc.Button("Cancel", id="cancel-group-modal", className="ms-auto", n_clicks=0),
+                    dbc.Button("Add to Group", id="confirm-add-to-group", color="primary")
+                ])
+            ], id="group-modal", is_open=False),
+            
+            # Hidden div to store which PID is being added to group
+            dcc.Store(id='selected-pid-for-group', data=None)
             
         ], fluid=True)
         
@@ -225,16 +247,62 @@ class DashOBDViewer:
                 dbc.Button("Add Group", id="btn-add-group", size="sm", className="me-2"),
                 dbc.Button("Clear Groups", id="btn-clear-groups", size="sm")
             ], className="mb-3"),
-            html.Div(id="groups-container")
+            html.Div(self.create_initial_groups_display(), id="groups-container")
         ])
         
         # PID checkboxes (organized by groups)
-        controls.append(html.Div(id="pid-checkboxes-container"))
+        controls.append(html.Div(self.create_initial_pid_checkboxes(), id="pid-checkboxes-container"))
         
         return controls
         
+    def create_initial_pid_checkboxes(self):
+        """Create initial PID checkboxes with actual content."""
+        checkbox_elements = []
+        
+        for group_name, pids in self.groups.items():
+            if pids:  # Only show groups that have PIDs
+                checkbox_elements.append(
+                    html.Details([
+                        html.Summary(f"{group_name} ({len(pids)} PIDs)", 
+                                   className="fw-bold mb-2"),
+                        html.Div([
+                            html.Div([
+                                dbc.Checklist(
+                                    options=[{"label": f"{pid} ({self.units.get(pid, 'N/A')})", "value": pid}],
+                                    value=[pid],  # All checked by default
+                                    id={"type": "pid-checkbox", "index": pid},
+                                    className="mb-1"
+                                ),
+                                html.Small(
+                                    dbc.Button("Add to Group", id={"type": "add-to-group", "index": pid}, 
+                                              size="sm", outline=True, color="primary"),
+                                    className="ms-2"
+                                )
+                            ], className="d-flex align-items-center justify-content-between")
+                            for pid in pids
+                        ])
+                    ], open=True, className="mb-3")
+                )
+                
+        return checkbox_elements
+        
+    def create_initial_groups_display(self):
+        """Create initial groups display with actual content."""
+        group_elements = []
+        for group_name, pids in self.groups.items():
+            group_elements.append(
+                html.Div([
+                    html.H6(f"{group_name} ({len(pids)} PIDs)", className="mb-2"),
+                    html.Div([
+                        html.Span(f"{pid} ({self.units.get(pid, 'N/A')})", 
+                                className="badge bg-secondary me-1 mb-1")
+                        for pid in pids
+                    ])
+                ], className="mb-3 p-2 border rounded")
+            )
+        return group_elements
+        
     def create_enhanced_time_controls(self):
-        """Create enhanced time navigation controls."""
         return html.Div([
             # Navigation buttons
             html.Div([
@@ -302,6 +370,134 @@ class DashOBDViewer:
     def setup_callbacks(self):
         """Setup all Dash callbacks."""
         
+        # Update groups container
+        @self.app.callback(
+            Output("groups-container", "children"),
+            [Input("btn-add-group", "n_clicks"),
+             Input("btn-clear-groups", "n_clicks"),
+             Input("initial-data-loaded", "data")],
+            [State("groups-store", "data")]
+        )
+        def update_groups(add_clicks, clear_clicks, data_loaded, groups):
+            """Update the groups display."""
+            # Initialize groups if empty
+            if not groups:
+                groups = self.groups.copy()
+                
+            ctx = callback_context
+            
+            if ctx.triggered:
+                trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+                
+                if trigger_id == "btn-add-group" and add_clicks:
+                    # Add a new group
+                    new_group_name = f"Group {len(groups) + 1}"
+                    groups[new_group_name] = []
+                elif trigger_id == "btn-clear-groups" and clear_clicks:
+                    # Clear all groups except Default
+                    default_pids = groups.get("Default", [])
+                    groups = {"Default": default_pids}
+                    
+            # Create group display
+            group_elements = []
+            for group_name, pids in groups.items():
+                group_elements.append(
+                    html.Div([
+                        html.H6(f"{group_name} ({len(pids)} PIDs)", className="mb-2"),
+                        html.Div([
+                            html.Span(f"{pid} ({self.units.get(pid, 'N/A')})", 
+                                    className="badge bg-secondary me-1 mb-1")
+                            for pid in pids
+                        ])
+                    ], className="mb-3 p-2 border rounded")
+                )
+                
+            return group_elements
+            
+        # Update PID checkboxes container
+        @self.app.callback(
+            [Output("pid-checkboxes-container", "children"),
+             Output("group-dropdown", "options")],
+            [Input("groups-store", "data"),
+             Input("pid-groups-store", "data"),
+             Input("initial-data-loaded", "data")]
+        )
+        def update_pid_checkboxes(groups, pid_groups, data_loaded):
+            """Update PID checkboxes organized by groups."""
+            # Initialize with current data if empty
+            if not groups:
+                groups = self.groups.copy()
+            if not pid_groups:
+                pid_groups = self.pid_groups.copy()
+                
+            # Create group dropdown options
+            group_options = [{"label": name, "value": name} for name in groups.keys()]
+            
+            # Create checkboxes organized by groups
+            checkbox_elements = []
+            
+            for group_name, pids in groups.items():
+                if pids:  # Only show groups that have PIDs
+                    checkbox_elements.append(
+                        html.Details([
+                            html.Summary(f"{group_name} ({len(pids)} PIDs)", 
+                                       className="fw-bold mb-2"),
+                            html.Div([
+                                html.Div([
+                                    dbc.Checklist(
+                                        options=[{"label": f"{pid} ({self.units.get(pid, 'N/A')})", "value": pid}],
+                                        value=[pid],  # All checked by default
+                                        id={"type": "pid-checkbox", "index": pid},
+                                        className="mb-1"
+                                    ),
+                                    html.Small(
+                                        dbc.Button("Add to Group", id={"type": "add-to-group", "index": pid}, 
+                                                  size="sm", outline=True, color="primary"),
+                                        className="ms-2"
+                                    )
+                                ], className="d-flex align-items-center justify-content-between")
+                                for pid in pids
+                            ])
+                        ], open=True, className="mb-3")
+                    )
+                    
+            return checkbox_elements, group_options
+            
+        # Handle group modal
+        @self.app.callback(
+            [Output("group-modal", "is_open"),
+             Output("modal-pid-name", "children"),
+             Output("selected-pid-for-group", "data")],
+            [Input({"type": "add-to-group", "index": ALL}, "n_clicks"),
+             Input("confirm-add-to-group", "n_clicks"),
+             Input("cancel-group-modal", "n_clicks")],
+            [State("group-modal", "is_open"),
+             State({"type": "add-to-group", "index": ALL}, "id")]
+        )
+        def handle_group_modal(add_clicks, confirm_clicks, cancel_clicks, is_open, button_ids):
+            """Handle the group modal for adding PIDs to groups."""
+            ctx = callback_context
+            
+            if not ctx.triggered:
+                return False, "", None
+                
+            trigger_id = ctx.triggered[0]['prop_id'].split('.')[0]
+            
+            if "add-to-group" in trigger_id:
+                # Find which button was clicked
+                for i, clicks in enumerate(add_clicks):
+                    if clicks and button_ids[i]:
+                        pid = button_ids[i]["index"]
+                        return True, f"PID: {pid} ({self.units.get(pid, 'N/A')})", pid
+                        
+            elif trigger_id == "confirm-add-to-group":
+                return False, "", None
+                
+            elif trigger_id == "cancel-group-modal":
+                return False, "", None
+                
+            return is_open, "", None
+            
         # Update graph when any control changes
         @self.app.callback(
             [Output("main-graph", "figure"),
@@ -309,21 +505,13 @@ class DashOBDViewer:
              Output("time-range-store", "data"),
              Output("graph-zoom-store", "data"),
              Output("zoom-status", "children")],
-            [Input({"type": "pid-checkbox", "index": dash.ALL}, "value"),
-             Input("btn-left-1800", "n_clicks"),
-             Input("btn-left-60", "n_clicks"),
-             Input("btn-left-30", "n_clicks"),
+            [Input({"type": "pid-checkbox", "index": ALL}, "value"),
              Input("btn-left-10", "n_clicks"),
              Input("btn-left-5", "n_clicks"),
-             Input("btn-left-3", "n_clicks"),
              Input("btn-left-1", "n_clicks"),
              Input("btn-right-1", "n_clicks"),
-             Input("btn-right-3", "n_clicks"),
              Input("btn-right-5", "n_clicks"),
              Input("btn-right-10", "n_clicks"),
-             Input("btn-right-30", "n_clicks"),
-             Input("btn-right-60", "n_clicks"),
-             Input("btn-right-1800", "n_clicks"),
              Input("btn-zoom-in", "n_clicks"),
              Input("btn-zoom-out", "n_clicks"),
              Input("btn-zoom-reset", "n_clicks"),
@@ -417,8 +605,6 @@ class DashOBDViewer:
         def handle_upload(contents, filenames):
             """Handle file uploads."""
             if contents:
-                # For now, just show status
-                # In a real implementation, you'd parse the CSV files
                 return html.Div([
                     f"Uploaded {len(filenames)} file(s):",
                     html.Ul([html.Li(fname) for fname in filenames])
@@ -438,78 +624,63 @@ class DashOBDViewer:
             )
             return fig
             
-        # Group visible PIDs by unit
-        visible_by_unit = defaultdict(list)
-        for pid in visible_pids:
-            if pid in self.units:
-                visible_by_unit[self.units[pid]].append(pid)
-                
-        if not visible_by_unit:
-            fig = go.Figure()
-            fig.add_annotation(
-                text="No data available",
-                xref="paper", yref="paper",
-                x=0.5, y=0.5, xanchor='center', yanchor='middle',
-                font=dict(size=16)
-            )
-            return fig
-            
-        # Calculate subplot layout
-        n_units = len(visible_by_unit)
+        # Create subplots - one for each PID (not grouped by unit)
+        n_pids = len(visible_pids)
         
         # Create subplots with shared x-axis
         fig = make_subplots(
-            rows=n_units, 
+            rows=n_pids, 
             cols=1,
             shared_xaxes=True,
             vertical_spacing=0.05 / global_zoom,
-            subplot_titles=[', '.join(pids) for pids in visible_by_unit.values()]
+            subplot_titles=visible_pids
         )
         
-        # Add traces for each PID
-        for i, (unit, pids) in enumerate(visible_by_unit.items()):
-            for pid in pids:
-                if pid in self.data:
-                    df = self.data[pid]
+        # Add trace for each PID
+        for i, pid in enumerate(visible_pids):
+            if pid in self.data:
+                df = self.data[pid]
+                unit = self.units.get(pid, '')
+                
+                # Filter data for current time range
+                mask = (df['SECONDS'] >= start_time) & (df['SECONDS'] <= end_time)
+                filtered_df = df[mask]
+                
+                if not filtered_df.empty:
+                    fig.add_trace(
+                        go.Scatter(
+                            x=filtered_df['SECONDS'],
+                            y=filtered_df['VALUE'],
+                            mode='lines+markers',
+                            name=pid,
+                            line=dict(color=self.colors.get(pid, 'blue'), width=2),
+                            marker=dict(size=4),
+                            hovertemplate=f"<b>{pid}</b><br>" +
+                                         "Time: %{x:.1f}s<br>" +
+                                         "Value: %{y:.2f} {unit}<br>" +
+                                         "<extra></extra>"
+                        ),
+                        row=i+1, col=1
+                    )
                     
-                    # Filter data for current time range
-                    mask = (df['SECONDS'] >= start_time) & (df['SECONDS'] <= end_time)
-                    filtered_df = df[mask]
-                    
-                    if not filtered_df.empty:
-                        fig.add_trace(
-                            go.Scatter(
-                                x=filtered_df['SECONDS'],
-                                y=filtered_df['VALUE'],
-                                mode='lines+markers',
-                                name=pid,
-                                line=dict(color=self.colors.get(pid, 'blue'), width=2),
-                                marker=dict(size=4),
-                                hovertemplate=f"<b>{pid}</b><br>" +
-                                             "Time: %{x:.1f}s<br>" +
-                                             "Value: %{y:.2f} {unit}<br>" +
-                                             "<extra></extra>"
-                            ),
-                            row=i+1, col=1
-                        )
-                        
             # Update y-axis label
+            unit = self.units.get(pid, '')
             fig.update_yaxes(title_text=unit, row=i+1, col=1)
             
         # Update layout
         fig.update_layout(
-            title="OBD Data Viewer",
-            height=300 * n_units * global_zoom,
-            showlegend=True,
+            title="OBD Data Viewer - Individual PIDs",
+            height=200 * n_pids * global_zoom,
+            showlegend=False,  # Hide legend since titles show PID names
             hovermode='x unified',
             dragmode='zoom',
             template='plotly_white'
         )
         
         # Update x-axis for all subplots
-        for i in range(1, n_units + 1):
+        for i in range(1, n_pids + 1):
             fig.update_xaxes(
-                title_text="Time (seconds)" if i == n_units else "",  # Only show title on bottom
+                title_text="Time (seconds)" if i == n_pids else "",  # Only show title on bottom
                 row=i, 
                 col=1,
                 showgrid=True,
@@ -522,7 +693,7 @@ class DashOBDViewer:
             )
             
         # Update y-axis grid lines
-        for i in range(1, n_units + 1):
+        for i in range(1, n_pids + 1):
             fig.update_yaxes(
                 row=i, 
                 col=1,
@@ -542,9 +713,9 @@ def main():
     # Use test data folder for demo
     test_folder = Path(__file__).parent.parent / "test"
     
-    app = DashOBDViewer(csv_folder_path=test_folder)
+    app = EnhancedDashOBDViewer(csv_folder_path=test_folder)
     
-    print("Starting OBD Data Viewer...")
+    print("Starting Enhanced OBD Data Viewer...")
     print(f"Open http://localhost:8050 in your browser")
     print("Press Ctrl+C to stop")
     
