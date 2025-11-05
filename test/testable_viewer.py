@@ -15,6 +15,10 @@ from pathlib import Path
 import glob
 from collections import defaultdict
 import colorsys
+import sys
+
+# Add src to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 class TestableOBDViewer:
     """Testable OBD Data Viewer that can be parameterized."""

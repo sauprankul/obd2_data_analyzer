@@ -9,8 +9,8 @@ from pathlib import Path
 import sys
 import time
 
-# Add current directory to path to import our modules
-sys.path.insert(0, str(Path(__file__).parent))
+# Add parent directory to path to import our modules
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 class TestOBDViewerGUI(unittest.TestCase):
     """Test the GUI components of the OBD Viewer."""

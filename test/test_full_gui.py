@@ -10,7 +10,7 @@ import sys
 import time
 
 # Add parent directory to path
-sys.path.insert(0, str(Path(__file__).parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 class TestFullFeaturedGUI(unittest.TestCase):
     """Test the full-featured GUI."""

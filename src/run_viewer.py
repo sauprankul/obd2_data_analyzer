@@ -27,9 +27,13 @@ def main():
     # Install dependencies if needed
     install_dependencies()
     
-    # Change to the correct directory
+    # Change to the parent directory (data folder)
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    os.chdir(script_dir)
+    parent_dir = os.path.dirname(script_dir)
+    os.chdir(parent_dir)
+    
+    # Add src to path
+    sys.path.insert(0, script_dir)
     
     # Launch the viewer
     print("Launching OBD Data Viewer...")

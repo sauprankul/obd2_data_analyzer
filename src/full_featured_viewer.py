@@ -539,7 +539,7 @@ def main():
     root = tk.Tk()
     
     # Use test data folder for demo
-    test_folder = Path(__file__).parent / "test"
+    test_folder = Path(__file__).parent.parent / "test"
     
     app = FullFeaturedOBDViewer(
         root, 
