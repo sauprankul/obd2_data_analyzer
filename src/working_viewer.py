@@ -149,7 +149,7 @@ class WorkingOBDViewer:
                     
                     # Remove from group button
                     html.Div([
-                        dbc.Button("-", id=f"remove-{pid}", size="sm", 
+                        dbc.Button("-", id={'type': 'remove-button', 'index': pid}, size="sm", 
                                   color="danger", style={"width": "30px"})
                     ], style={"display": "inline-block", "verticalAlign": "top", "marginLeft": "5px"})
                     
@@ -355,6 +355,7 @@ class WorkingOBDViewer:
             Input({'type': 'group-name', 'index': dash.ALL}, 'n_clicks'),
             Input('cancel-rename-group', 'n_clicks'),
             Input('confirm-rename-group', 'n_clicks'),
+            Input({'type': 'remove-button', 'index': dash.ALL}, 'n_clicks'),
             State('add-pid-modal', 'is_open'),
             State('pid-selection-checklist', 'value'),
             State('group-operation-store', 'data'),
@@ -363,7 +364,7 @@ class WorkingOBDViewer:
         )
         def manage_all_group_operations(new_group_clicks, cancel_clicks, confirm_clicks, 
                                        add_clicks, unit_selection, group_name_clicks, cancel_rename, confirm_rename,
-                                       modal_is_open, selected_pids, store_data, rename_modal_open, rename_input):
+                                       remove_clicks, modal_is_open, selected_pids, store_data, rename_modal_open, rename_input):
             """Handle all group operations in one callback."""
             ctx = dash.callback_context
             
@@ -475,6 +476,31 @@ class WorkingOBDViewer:
                     
                     info_text = f"Unit: {unit_selection}. {len(pid_options)} PIDs available."
                     return self.create_pid_controls(), store_data, True, [{"label": unit_selection, "value": unit_selection}], pid_options, [], info_text, False, "", ""
+            
+            # Handle remove button clicks (pattern matching)
+            if 'remove-button' in trigger_id:
+                # Parse the trigger ID to extract the PID
+                trigger_base = trigger_id.split('.')[0]
+                import ast
+                try:
+                    parsed_trigger = ast.literal_eval(trigger_base)
+                    if isinstance(parsed_trigger, dict) and parsed_trigger.get('type') == 'remove-button':
+                        pid = parsed_trigger.get('index')
+                        print(f"Removing PID from group: {pid}")
+                        
+                        # Find which group the PID is in
+                        current_group = self.pid_groups.get(pid)
+                        if current_group and current_group in self.groups:
+                            # Remove PID from group
+                            self.groups[current_group].remove(pid)
+                            # Remove PID from pid_groups mapping
+                            del self.pid_groups[pid]
+                            
+                            print(f"Removed {pid} from group {current_group}")
+                            return self.create_pid_controls(), {"operation": "removed", "pid": pid, "from_group": current_group}, False, [], [], [], "", False, "", ""
+                        
+                except Exception as e:
+                    print(f"Error parsing remove trigger ID: {e}")
             
             # Handle regular button clicks
             trigger_id = trigger_id.split('.')[0]
@@ -646,7 +672,8 @@ class WorkingOBDViewer:
             
             # Create subplots - one per GROUP, not per PID
             fig = make_subplots(rows=len(visible_groups), cols=1, 
-                              subplot_titles=list(visible_groups.keys()), vertical_spacing=0.05)
+                              subplot_titles=list(visible_groups.keys()), vertical_spacing=0.05,
+                              specs=[[{"secondary_y": False}] for _ in visible_groups])
             
             for i, (group_name, pids) in enumerate(visible_groups.items()):
                 # Add all PIDs in this group to the same subplot
@@ -654,7 +681,9 @@ class WorkingOBDViewer:
                     df = self.data[pid]
                     fig.add_trace(
                         go.Scatter(x=df['SECONDS'], y=df['VALUE'], 
-                                 name=pid, line=dict(color=self.colors[pid])),
+                                 name=pid, 
+                                 line=dict(color=self.colors[pid]),
+                                 showlegend=False),  # Disable global legend
                         row=i+1, col=1
                     )
                 
@@ -663,15 +692,36 @@ class WorkingOBDViewer:
                     # All PIDs in group should have same unit, get it from first PID
                     unit = self.units[pids[0]]
                     fig.update_yaxes(title_text=unit, row=i+1, col=1)
+                
+                # Add custom legend for this subplot if it has multiple PIDs
+                if len(pids) > 1:
+                    legend_y = 0.95  # Start from top of subplot
+                    for pid in pids:
+                        # Add legend entry as annotation
+                        fig.add_annotation(
+                            x=1.01,  # Position to the right of subplot
+                            y=legend_y,
+                            xref="x domain",
+                            yref="y domain",
+                            text=f"● {pid}",
+                            showarrow=False,
+                            font=dict(size=10, color=self.colors[pid]),
+                            xanchor="left",
+                            yanchor="middle",
+                            row=i+1, col=1
+                        )
+                        legend_y -= 0.05  # Move down for next entry
             
             # Apply zoom to height and disable Plotly zoom
             base_height = 250
+            
             fig.update_layout(
                 height=base_height * len(visible_groups) * update_graph.zoom_level, 
-                showlegend=False,
+                showlegend=False,  # Disable global legend since we use custom annotations
                 dragmode=False,  # Disable all drag/zoom modes
                 xaxis=dict(showgrid=True, gridwidth=2, gridcolor='lightgray'),
-                yaxis=dict(showgrid=True, gridwidth=2, gridcolor='lightgray')
+                yaxis=dict(showgrid=True, gridwidth=2, gridcolor='lightgray'),
+                margin=dict(r=120)  # Add right margin for custom legends
             )
             
             # Update all subplots to disable zoom and sync axes with custom x-axis range
