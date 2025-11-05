@@ -90,40 +90,66 @@ class FullFeaturedOBDViewer:
         self.load_btn.pack(pady=5)
         
         # Scrollable frame for checkboxes
-        canvas = tk.Canvas(sidebar_frame)
-        scrollbar = ttk.Scrollbar(sidebar_frame, orient="vertical", command=canvas.yview)
-        self.checkbox_frame = ttk.Frame(canvas)
+        self.sidebar_canvas = tk.Canvas(sidebar_frame, width=200)
+        self.sidebar_scrollbar = ttk.Scrollbar(sidebar_frame, orient="vertical", command=self.sidebar_canvas.yview)
+        self.scrollable_sidebar = ttk.Frame(self.sidebar_canvas)
         
-        self.checkbox_frame.bind(
+        self.scrollable_sidebar.bind(
             "<Configure>",
-            lambda e: canvas.configure(scrollregion=canvas.bbox("all"))
+            lambda e: self.sidebar_canvas.configure(scrollregion=self.sidebar_canvas.bbox("all"))
         )
         
-        canvas.create_window((0, 0), window=self.checkbox_frame, anchor="nw")
-        canvas.configure(yscrollcommand=scrollbar.set)
+        self.sidebar_canvas.create_window((0, 0), window=self.scrollable_sidebar, anchor="nw")
+        self.sidebar_canvas.configure(yscrollcommand=self.sidebar_scrollbar.set)
         
-        canvas.pack(side="left", fill="both", expand=True)
-        scrollbar.pack(side="right", fill="y")
+        self.sidebar_canvas.pack(side="left", fill="both", expand=True)
+        self.sidebar_scrollbar.pack(side="right", fill="y")
         
-        self.canvas = canvas
+        self.pid_checkboxes = {}
         self.pid_vars = {}
+        self.pid_labels = {}
         
     def setup_plot_area(self, parent):
-        """Setup the main plotting area."""
-        plot_frame = ttk.Frame(parent)
-        plot_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        """Setup the plot area with vertical scrolling and proper scaling."""
+        plot_container = ttk.Frame(parent)
+        plot_container.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         
-        # Create matplotlib figure
-        self.figure = Figure(figsize=(10, 8), dpi=80)
-        self.figure.patch.set_facecolor('white')
+        # Global zoom controls
+        zoom_frame = ttk.Frame(plot_container)
+        zoom_frame.pack(fill=tk.X, pady=(0, 5))
         
-        # Create canvas
-        self.canvas_plot = FigureCanvasTkAgg(self.figure, master=plot_frame)
-        self.canvas_plot.draw()
+        ttk.Label(zoom_frame, text="Graph Height:").pack(side=tk.LEFT)
+        ttk.Button(zoom_frame, text="Zoom In", command=self.global_zoom_in).pack(side=tk.LEFT, padx=2)
+        ttk.Button(zoom_frame, text="Zoom Out", command=self.global_zoom_out).pack(side=tk.LEFT, padx=2)
+        ttk.Button(zoom_frame, text="Reset", command=self.global_zoom_reset).pack(side=tk.LEFT, padx=2)
+        
+        # Main plot frame that will contain the canvas and scrollbar
+        main_plot_frame = ttk.Frame(plot_container)
+        main_plot_frame.pack(fill=tk.BOTH, expand=True)
+        
+        # Scrollable plot area with proper scaling
+        self.plot_canvas = tk.Canvas(main_plot_frame, bg='white')
+        self.plot_scrollbar = ttk.Scrollbar(main_plot_frame, orient="vertical", command=self.plot_canvas.yview)
+        self.scrollable_plot = ttk.Frame(self.plot_canvas)
+        
+        # Make canvas expand with window
+        self.plot_canvas.create_window((0, 0), window=self.scrollable_plot, anchor="nw")
+        self.plot_canvas.configure(yscrollcommand=self.plot_scrollbar.set)
+        
+        # Pack canvas to expand - this is the key fix
+        self.plot_canvas.pack(side="left", fill="both", expand=True)
+        self.plot_scrollbar.pack(side="right", fill="y")
+        
+        # Create matplotlib figure with dynamic size
+        self.figure = Figure(figsize=(10, 6), dpi=100)
+        self.canvas_plot = FigureCanvasTkAgg(self.figure, master=self.scrollable_plot)
         self.canvas_plot.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         
-        # Toolbar with zoom controls
-        toolbar_frame = ttk.Frame(plot_frame)
+        # Bind window resize to update figure size
+        self.scrollable_plot.bind("<Configure>", self.on_plot_resize)
+        
+        # Navigation toolbar
+        toolbar_frame = ttk.Frame(self.scrollable_plot)
         toolbar_frame.pack(side=tk.BOTTOM, fill=tk.X)
         
         self.toolbar = NavigationToolbar2Tk(self.canvas_plot, toolbar_frame)
@@ -142,6 +168,146 @@ class FullFeaturedOBDViewer:
         self.reset_zoom_btn = ttk.Button(zoom_frame, text="Reset Zoom", command=self.reset_zoom)
         self.reset_zoom_btn.pack(side=tk.LEFT, padx=2)
         
+        # Initialize global zoom level
+        self.global_zoom_level = 1.0
+        self.subplot_heights = {}  # Store individual subplot heights
+        
+    def update_canvas_scroll_region(self):
+        """Update the canvas scroll region to match the actual content size."""
+        # Update canvas scroll region after a short delay to ensure layout is complete
+        self.root.after(100, self._update_scroll_region)
+        
+    def _update_scroll_region(self):
+        """Internal method to update scroll region."""
+        try:
+            # Get the actual size of the scrollable content
+            self.scrollable_plot.update_idletasks()
+            bbox = self.scrollable_plot.bbox("all")
+            if bbox:
+                # Add some padding to the bottom
+                self.plot_canvas.configure(scrollregion=(bbox[0], bbox[1], bbox[2], bbox[3] + 50))
+        except:
+            pass
+        
+    def on_plot_resize(self, event):
+        """Handle plot area resize - only update width, preserve zoom-controlled height."""
+        # Update figure width based on canvas size, but keep height controlled by zoom
+        canvas_width = event.width
+        
+        if canvas_width > 100:
+            # Calculate new figure width (in inches)
+            dpi = self.figure.get_dpi()
+            width_in = canvas_width / dpi
+            
+            # Keep current height (controlled by zoom)
+            current_height = self.figure.get_figheight()
+            
+            self.figure.set_size_inches(width_in, current_height)
+            self.figure.tight_layout()
+            self.canvas_plot.draw()
+            # Update scroll region after resize
+            self.update_canvas_scroll_region()
+        
+    def global_zoom_in(self):
+        """Global zoom in - make graphs taller."""
+        if self.global_zoom_level < 3.0:
+            self.global_zoom_level *= 1.2
+            self.refresh_plot()
+            
+    def global_zoom_out(self):
+        """Global zoom out - make graphs shorter."""
+        if self.global_zoom_level > 0.5:
+            self.global_zoom_level /= 1.2
+            self.refresh_plot()
+            
+    def global_zoom_reset(self):
+        """Reset global zoom."""
+        self.global_zoom_level = 1.0
+        self.refresh_plot()
+        
+    def create_draggable_checkbox(self, parent, pid, unit):
+        """Create a draggable checkbox for PID."""
+        frame = ttk.Frame(parent, relief="raised", borderwidth=1)
+        frame.pack(fill=tk.X, pady=2, padx=5)
+        
+        # Store original position for drag detection
+        frame.pid = pid
+        frame.original_y = 0
+        
+        # Make the entire frame draggable
+        frame.bind("<Button-1>", self.on_drag_start)
+        frame.bind("<B1-Motion>", self.on_drag_motion)
+        frame.bind("<ButtonRelease-1>", self.on_drag_end)
+        
+        # Add cursor change on hover
+        frame.bind("<Enter>", lambda e: frame.config(cursor="hand2"))
+        frame.bind("<Leave>", lambda e: frame.config(cursor=""))
+        
+        # Checkbox and label
+        var = tk.BooleanVar(value=True)
+        checkbox = ttk.Checkbutton(frame, text=pid, variable=var, 
+                                  command=lambda: self.toggle_pid(pid))
+        checkbox.pack(side=tk.LEFT, padx=5)
+        
+        # Make checkbox also draggable
+        checkbox.bind("<Button-1>", lambda e: self.on_drag_start(pid, e))
+        checkbox.bind("<B1-Motion>", lambda e: self.on_drag_motion(pid, e))
+        checkbox.bind("<ButtonRelease-1>", lambda e: self.on_drag_end(pid, e))
+        
+        # Unit label
+        unit_label = ttk.Label(frame, text=f"({unit})", font=("Arial", 8))
+        unit_label.pack(side=tk.LEFT, padx=(5, 0))
+        
+        # Drag handle indicator
+        drag_label = ttk.Label(frame, text="⋮⋮", font=("Arial", 8))
+        drag_label.pack(side=tk.RIGHT, padx=2)
+        
+        self.pid_checkboxes[pid] = checkbox
+        self.pid_vars[pid] = var
+        self.pid_labels[pid] = unit_label
+        
+        return frame
+        
+    def on_drag_start(self, event):
+        """Start dragging a PID."""
+        widget = event.widget
+        # Find the frame that contains the PID
+        while widget and not hasattr(widget, 'pid'):
+            widget = widget.master
+        
+        if widget and hasattr(widget, 'pid'):
+            self.drag_data = {"pid": widget.pid, "widget": widget, "y": event.y_root}
+            widget.config(relief="sunken")
+        
+    def on_drag_motion(self, event):
+        """Handle drag motion with visual feedback."""
+        if hasattr(self, 'drag_data'):
+            # Move the widget visually during drag
+            y_diff = event.y_root - self.drag_data["y"]
+            # For now, just provide visual feedback
+            pass
+        
+    def on_drag_end(self, event):
+        """End dragging and reorder PIDs."""
+        if hasattr(self, 'drag_data'):
+            widget = self.drag_data["widget"]
+            widget.config(relief="raised")
+            
+            # Find drop target based on mouse position
+            drop_y = event.y_root
+            target_widget = event.widget.winfo_containing(drop_y, drop_y)
+            
+            # Find the target frame
+            while target_widget and not hasattr(target_widget, 'pid'):
+                target_widget = target_widget.master
+            
+            if target_widget and target_widget != widget:
+                # Simple reordering - move the widget
+                widget.pack_forget()
+                widget.pack(before=target_widget, fill=tk.X, pady=2, padx=5)
+            
+            del self.drag_data
+            
     def setup_scrollbar(self):
         """Setup time navigation controls."""
         nav_frame = ttk.Frame(self.root)
@@ -317,38 +483,41 @@ class FullFeaturedOBDViewer:
         self.colors.clear()
         self.color_index = 0
         
-        for widget in self.checkbox_frame.winfo_children():
-            widget.destroy()
-        self.pid_vars.clear()
+        self.clear_checkboxes()
+        
+    def clear_checkboxes(self):
+        """Clear existing checkboxes."""
+        if hasattr(self, 'scrollable_sidebar'):
+            for widget in self.scrollable_sidebar.winfo_children():
+                widget.destroy()
+        if hasattr(self, 'pid_checkboxes'):
+            self.pid_checkboxes.clear()
+        if hasattr(self, 'pid_vars'):
+            self.pid_vars.clear()
+        if hasattr(self, 'pid_labels'):
+            self.pid_labels.clear()
         
     def setup_pid_checkboxes(self):
-        """Setup checkboxes for PIDs."""
+        """Setup draggable checkboxes for PIDs in scrollable sidebar."""
         for unit, pids in self.unit_groups.items():
             unit_label = ttk.Label(
-                self.checkbox_frame, 
+                self.scrollable_sidebar, 
                 text=f"Unit: {unit}", 
                 font=("Arial", 10, "bold")
             )
             unit_label.pack(pady=(10, 2), anchor="w")
             
             for pid in pids:
-                var = tk.BooleanVar(value=True)
-                checkbox = ttk.Checkbutton(
-                    self.checkbox_frame,
-                    text=pid,
-                    variable=var,
-                    command=lambda p=pid, v=var: self.toggle_pid(p, v.get())
-                )
-                checkbox.pack(anchor="w", padx=(20, 0))
-                self.pid_vars[pid] = var
+                self.create_draggable_checkbox(self.scrollable_sidebar, pid, unit)
                 
-    def toggle_pid(self, pid, is_visible):
+    def toggle_pid(self, pid):
         """Toggle PID visibility."""
-        if is_visible:
-            self.visible_plots.add(pid)
-        else:
-            self.visible_plots.discard(pid)
-        self.refresh_plot()
+        if pid in self.pid_vars:
+            if self.pid_vars[pid].get():
+                self.visible_plots.add(pid)
+            else:
+                self.visible_plots.discard(pid)
+            self.refresh_plot()
         
     def show_all_plots(self):
         """Show all plots."""
@@ -642,7 +811,7 @@ class FullFeaturedOBDViewer:
         self.refresh_plot()
         
     def refresh_plot(self):
-        """Refresh the plot."""
+        """Refresh the plot with improved spacing and global zoom."""
         self.figure.clear()
         
         if not self.data or not self.visible_plots:
@@ -661,8 +830,24 @@ class FullFeaturedOBDViewer:
             if visible_by_unit:
                 n_units = len(visible_by_unit)
                 
+                # Calculate the total figure height based on global zoom
+                # Each graph gets more vertical space when zoomed in
+                base_height_per_graph = 2.0  # inches per graph at 1x zoom
+                zoomed_height_per_graph = base_height_per_graph * self.global_zoom_level
+                
+                # Total figure height = (height per graph * number of graphs) + spacing
+                total_figure_height = (zoomed_height_per_graph * n_units) + (n_units * 0.5)
+                
+                # Width stays responsive to window, height is controlled by zoom
+                current_width = self.figure.get_figwidth()
+                self.figure.set_size_inches(current_width, total_figure_height)
+                
+                # Use gridspec with fixed row heights based on zoom
+                # Each row gets equal height based on the zoom level
+                gs = self.figure.add_gridspec(n_units, 1, height_ratios=[1]*n_units, hspace=0.3)
+                
                 for i, (unit, pids) in enumerate(visible_by_unit.items()):
-                    ax = self.figure.add_subplot(n_units, 1, i + 1)
+                    ax = self.figure.add_subplot(gs[i])
                     
                     for pid in pids:
                         if pid in self.data:
@@ -683,9 +868,9 @@ class FullFeaturedOBDViewer:
                     ax.set_xlabel('Time (seconds)', fontsize=10)
                     ax.set_ylabel(f'{unit}', fontsize=10)
                     
-                    # Comma-separated PID names in title
+                    # Comma-separated PID names in title with fixed padding
                     pid_names = ', '.join(pids)
-                    ax.set_title(pid_names, fontsize=11, fontweight='bold')
+                    ax.set_title(pid_names, fontsize=11, fontweight='bold', pad=10)
                     ax.grid(True, alpha=0.3)
                     
                     self.set_y_axis_limits(ax, pids)
@@ -695,10 +880,13 @@ class FullFeaturedOBDViewer:
                         
                     ax.tick_params(axis='x', labelsize=8)
                     ax.tick_params(axis='y', labelsize=8)
-                    
+                
+                # Apply tight layout
                 self.figure.tight_layout()
                 
+        # Draw and update scroll region
         self.canvas_plot.draw()
+        self.update_canvas_scroll_region()
         
     def set_y_axis_limits(self, ax, pids):
         """Set y-axis limits."""

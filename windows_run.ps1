@@ -1,6 +1,6 @@
 # PowerShell launcher for OBD Data Viewer
-Write-Host "OBD Data Viewer - PowerShell Launcher" -ForegroundColor Green
-Write-Host "====================================" -ForegroundColor Green
+Write-Host "OBD Data Viewer - Dash Edition" -ForegroundColor Green
+Write-Host "================================" -ForegroundColor Green
 
 # Check if Python is installed
 try {
@@ -34,15 +34,16 @@ try {
     exit 1
 }
 
-# Add src to Python path and run the viewer
-Write-Host "Launching OBD Data Viewer..." -ForegroundColor Blue
-$env:PYTHONPATH = "$PSScriptRoot\src;$env:PYTHONPATH"
+# Add src to Python path and run the Dash viewer
+Write-Host "Starting OBD Data Viewer..." -ForegroundColor Blue
+Write-Host "This will open in your web browser at http://localhost:8050" -ForegroundColor Yellow
+Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
+Write-Host ""
 
 try {
-    python src\full_featured_viewer.py
+    python src\dash_viewer.py
 } catch {
-    Write-Host "Error occurred while running the viewer" -ForegroundColor Red
-    Write-Host $_.Exception.Message -ForegroundColor Red
+    Write-Host "Error running the viewer" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
