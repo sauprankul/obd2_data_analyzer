@@ -630,3 +630,57 @@
 2025-12-11 23:10:19,050 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
 2025-12-11 23:10:19,198 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
 2025-12-11 23:10:20,298 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 23:13:41,337 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 11-16-16.csv (4.5MB)
+2025-12-11 23:13:41,416 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 23:13:42,042 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 23:13:46,255 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 37 channels
+2025-12-11 23:19:20,185 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 23:19:20,185 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 23:19:22,896 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 23:19:23,126 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 23:19:23,802 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 23:19:28,275 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 23:19:28,295 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 23:19:28,439 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 23:19:29,677 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 23:21:29,750 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 23:21:29,751 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 23:21:33,081 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 23:21:33,355 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 23:21:34,601 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 23:21:36,607 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 23:21:36,631 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 23:21:36,830 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 23:21:38,250 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 23:22:35,180 - obd2_viewer.native.main_window - INFO - Creating math channel: AFR Delta = A - B (A=Fuel_Air_commanded_equivalence_ratio, B=Oxygen_sensor_1_Wide_Range_Equivalence_ratio)
+2025-12-11 23:22:35,284 - obd2_viewer.native.main_window - INFO - Created math channel 'AFR Delta' for nov_4_test_data.csv with 8988 points
+2025-12-11 23:22:52,741 - obd2_viewer.native.main_window - INFO - Creating math channel: Fuel Pressure Delta = A - B (A=Commanded_Fuel_Rail_Pressure_, B=Fuel_Rail_Pressure)
+2025-12-11 23:22:52,837 - obd2_viewer.native.main_window - INFO - Created math channel 'Fuel Pressure Delta' for nov_4_test_data.csv with 8988 points
+2025-12-11 23:22:59,923 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 11-16-16.csv (4.5MB)
+2025-12-11 23:23:00,002 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 23:23:00,615 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 23:23:01,081 - obd2_viewer.native.main_window - INFO - Applied math channel 'AFR Delta' to 2025-11-20 11-16-16.csv
+2025-12-11 23:23:01,595 - obd2_viewer.native.main_window - INFO - Applied math channel 'Fuel Pressure Delta' to 2025-11-20 11-16-16.csv
+2025-12-11 23:23:05,683 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 39 channels
+2025-12-11 23:23:41,666 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 23:23:41,667 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 23:23:44,388 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 23:23:44,630 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 23:23:45,505 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 23:23:47,522 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 11-16-16.csv (4.5MB)
+2025-12-11 23:23:47,610 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 23:23:48,229 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 23:23:49,407 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 37 channels
+2025-12-11 23:24:00,435 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 16-05-09.csv (3.2MB)
+2025-12-11 23:24:00,498 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 23:24:01,013 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 23:24:05,005 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 37 channels
+2025-12-11 23:24:22,268 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 23:24:22,268 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 23:24:24,930 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 23:24:25,165 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 23:24:25,845 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 23:24:28,636 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 16-05-09.csv (3.2MB)
+2025-12-11 23:24:28,704 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 23:24:29,177 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 23:24:29,920 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 37 channels

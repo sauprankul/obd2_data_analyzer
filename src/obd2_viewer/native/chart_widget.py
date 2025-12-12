@@ -42,6 +42,9 @@ class ChannelPlotWidget(pg.PlotWidget):
         self.setBackground('w')
         self.showGrid(x=True, y=True, alpha=0.3)
         
+        # Performance optimizations
+        self.setAntialiasing(False)  # Faster rendering
+        
         # Set title with larger font for channel name and value
         self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{channel_name}</span> <span style="font-size: 10pt; color: #666;">({unit})</span>')
         self.setLabel('left', '', units=unit)
@@ -68,6 +71,7 @@ class ChannelPlotWidget(pg.PlotWidget):
         # Disable scroll wheel zoom - scroll should scroll the container, not zoom
         self.setMouseEnabled(x=True, y=False)
         self.getViewBox().setMouseEnabled(x=True, y=False)
+        
         
     def wheelEvent(self, event):
         """Override wheel event to prevent zoom - let parent scroll area handle it."""
@@ -274,7 +278,9 @@ class OBD2ChartWidget(QWidget):
         layout.addWidget(self.scroll_area)
         
         # Configure PyQtGraph global settings
-        pg.setConfigOptions(antialias=True, useOpenGL=True)
+        # useOpenGL=False prevents blank rendering issues in scroll areas
+        # The performance is still good with software rendering for our data sizes
+        pg.setConfigOptions(antialias=False, useOpenGL=False)
     
     def load_data(self, imports: List[Any]):
         """
