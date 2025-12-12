@@ -179,6 +179,13 @@ class MultiChannelCSVParser:
             x_clean = x[valid_mask]
             y_clean = y[valid_mask]
             
+            # Remove duplicate x values (keep first occurrence) to avoid divide-by-zero
+            # This happens when multiple samples have the same timestamp
+            _, unique_indices = np.unique(x_clean, return_index=True)
+            unique_indices = np.sort(unique_indices)  # Preserve original order
+            x_clean = x_clean[unique_indices]
+            y_clean = y_clean[unique_indices]
+            
             # Create interpolation function
             if len(x_clean) >= 2:
                 interp_func = interpolate.interp1d(

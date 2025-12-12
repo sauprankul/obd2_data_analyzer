@@ -2189,6 +2189,9 @@ class OBD2MainWindow(QMainWindow):
         dialog = SynchronizeDialog(self.imports[import_index], import_index, self)
         dialog.offset_changed.connect(self._on_import_offset_changed)
         dialog.exec()
+        # Reapply filters after dialog closes (offsets may have changed)
+        if self.filters:
+            self._apply_filters()
     
     def _on_import_offset_changed(self, import_index: int, new_offset: float):
         """Handle import time offset change."""
@@ -2675,7 +2678,11 @@ class OBD2MainWindow(QMainWindow):
         - Show: adds matching intervals to visible set
         - Hide: removes matching intervals from visible set
         
-        Last filter in list = highest precedence (applied last, wins conflicts).
+        Top filter = highest precedence (processed last, wins conflicts).
+        
+        IMPORTANT: Filter matches are unified across all imports. If ANY import
+        matches a filter at time t, ALL imports are considered to match at that
+        time (adjusted for their time offsets).
         """
         import numpy as np
         
@@ -2695,37 +2702,20 @@ class OBD2MainWindow(QMainWindow):
         
         INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
         
-        filter_masks = {}  # {import_index: {channel: mask_array}}
-        filter_intervals = {}  # {import_index: [(start, end), ...]} for line breaks
+        # PHASE 1: Collect matching intervals from ALL imports for each filter
+        # Store as {filter_name: [(start, end), ...]} in absolute time (import 0's time frame)
+        filter_unified_intervals = {}  # {filter_name: merged_intervals}
         
-        for imp_idx, imp in enumerate(self.imports):
-            # Initialize visibility mask for each channel (start with all visible)
-            channel_masks = {}
-            for ch_name, ch_df in imp.channels_data.items():
-                channel_masks[ch_name] = np.ones(len(ch_df), dtype=bool)
+        for filter_name, definition in active_filters:
+            expression = definition['expression']
+            inputs = definition['inputs']
+            buffer_seconds = definition['buffer_seconds']
             
-            # Track final merged intervals for line breaks
-            final_show_intervals = []
+            all_matching_times = []  # Collect from all imports in absolute time
             
-            # Check if any show filter exists (determines initial state)
-            # If any show filter exists, start with nothing visible (shows add)
-            # If only hide filters, start with all visible (hides remove)
-            has_any_show = any(defn['mode'] == 'show' for _, defn in active_filters)
-            if has_any_show:
-                # Start with nothing visible
-                for ch_name in channel_masks:
-                    channel_masks[ch_name] = np.zeros(len(channel_masks[ch_name]), dtype=bool)
-            
-            # Process filters BOTTOM to TOP (reverse order) so top = highest precedence
-            for filter_name, definition in reversed(active_filters):
-                expression = definition['expression']
-                inputs = definition['inputs']
-                mode = definition['mode']
-                buffer_seconds = definition['buffer_seconds']
-                
+            for imp_idx, imp in enumerate(self.imports):
                 input_a = inputs.get('A', '')
                 if not input_a or input_a not in imp.channels_data:
-                    logger.warning(f"Filter '{filter_name}': Input A '{input_a}' not found in import {imp_idx}")
                     continue
                 
                 # Get time points from input A
@@ -2778,60 +2768,87 @@ class OBD2MainWindow(QMainWindow):
                     else:
                         bool_mask = np.full(len(times), bool(result))
                     
-                    # Get matching time points
-                    matching_times = times[bool_mask]
+                    # Get matching time points and convert to absolute (display) time
+                    # Absolute time = local time + offset (what's shown on chart)
+                    matching_local_times = times[bool_mask]
+                    matching_absolute_times = matching_local_times + imp.time_offset
                     
-                    logger.info(f"Filter '{filter_name}': {len(matching_times)} matches out of {len(times)} points (mode={mode})")
-                    
-                    if len(matching_times) == 0:
-                        continue
-                    
-                    # Convert to intervals [t - buffer, t + buffer]
-                    intervals = [(t - buffer_seconds, t + buffer_seconds) for t in matching_times]
-                    
-                    # Merge overlapping intervals
-                    intervals.sort(key=lambda x: x[0])
-                    merged = [intervals[0]]
-                    for start, end in intervals[1:]:
-                        if start <= merged[-1][1]:
-                            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
-                        else:
-                            merged.append((start, end))
-                    
-                    # Apply this filter's effect to each channel's mask
-                    interval_starts = np.array([iv[0] for iv in merged])
-                    interval_ends = np.array([iv[1] for iv in merged])
-                    
-                    for ch_name, ch_df in imp.channels_data.items():
-                        ch_times = ch_df['SECONDS'].values
-                        
-                        # Check which points fall within the merged intervals
-                        insert_idx = np.searchsorted(interval_starts, ch_times, side='right') - 1
-                        in_interval = np.zeros(len(ch_times), dtype=bool)
-                        valid_idx = insert_idx >= 0
-                        in_interval[valid_idx] = ch_times[valid_idx] <= interval_ends[insert_idx[valid_idx]]
-                        
-                        # Apply based on mode
-                        if mode == 'show':
-                            # Show mode: add matching points to visible set
-                            channel_masks[ch_name] = channel_masks[ch_name] | in_interval
-                        else:
-                            # Hide mode: remove matching points from visible set
-                            channel_masks[ch_name] = channel_masks[ch_name] & ~in_interval
-                    
-                    # Track intervals for line breaks (only from show filters)
-                    if mode == 'show':
-                        final_show_intervals.extend(merged)
+                    all_matching_times.extend(matching_absolute_times)
                     
                 except Exception as e:
-                    logger.error(f"Error evaluating filter '{filter_name}': {e}")
+                    logger.error(f"Error evaluating filter '{filter_name}' for import {imp_idx}: {e}")
                     continue
+            
+            # Convert all matching times to intervals and merge
+            if all_matching_times:
+                intervals = [(t - buffer_seconds, t + buffer_seconds) for t in all_matching_times]
+                intervals.sort(key=lambda x: x[0])
+                merged = [intervals[0]]
+                for start, end in intervals[1:]:
+                    if start <= merged[-1][1]:
+                        merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                    else:
+                        merged.append((start, end))
+                filter_unified_intervals[filter_name] = merged
+                logger.info(f"Filter '{filter_name}': {len(all_matching_times)} total matches across all imports, {len(merged)} merged intervals")
+            else:
+                filter_unified_intervals[filter_name] = []
+                logger.info(f"Filter '{filter_name}': 0 matches across all imports")
+        
+        # PHASE 2: Apply unified intervals to each import
+        filter_masks = {}  # {import_index: {channel: mask_array}}
+        filter_intervals = {}  # {import_index: [(start, end), ...]} for line breaks
+        
+        # Check if any show filter exists (determines initial state)
+        has_any_show = any(defn['mode'] == 'show' for _, defn in active_filters)
+        
+        for imp_idx, imp in enumerate(self.imports):
+            # Initialize visibility mask for each channel
+            channel_masks = {}
+            for ch_name, ch_df in imp.channels_data.items():
+                if has_any_show:
+                    # Start with nothing visible (shows add)
+                    channel_masks[ch_name] = np.zeros(len(ch_df), dtype=bool)
+                else:
+                    # Start with all visible (hides remove)
+                    channel_masks[ch_name] = np.ones(len(ch_df), dtype=bool)
+            
+            # Process filters BOTTOM to TOP (reverse order) so top = highest precedence
+            for filter_name, definition in reversed(active_filters):
+                mode = definition['mode']
+                unified_intervals = filter_unified_intervals.get(filter_name, [])
+                
+                if not unified_intervals:
+                    continue
+                
+                # Convert unified intervals (absolute/display time) to this import's local time
+                # Local time = absolute time - offset (stored data times)
+                local_intervals = [(start - imp.time_offset, end - imp.time_offset) 
+                                   for start, end in unified_intervals]
+                
+                interval_starts = np.array([iv[0] for iv in local_intervals])
+                interval_ends = np.array([iv[1] for iv in local_intervals])
+                
+                # Apply to each channel's mask
+                for ch_name, ch_df in imp.channels_data.items():
+                    ch_times = ch_df['SECONDS'].values
+                    
+                    # Check which points fall within the intervals
+                    insert_idx = np.searchsorted(interval_starts, ch_times, side='right') - 1
+                    in_interval = np.zeros(len(ch_times), dtype=bool)
+                    valid_idx = insert_idx >= 0
+                    in_interval[valid_idx] = ch_times[valid_idx] <= interval_ends[insert_idx[valid_idx]]
+                    
+                    # Apply based on mode
+                    if mode == 'show':
+                        channel_masks[ch_name] = channel_masks[ch_name] | in_interval
+                    else:
+                        channel_masks[ch_name] = channel_masks[ch_name] & ~in_interval
             
             # Store final masks
             filter_masks[imp_idx] = channel_masks
             
             # Compute visible intervals from the final mask for NaN separators
-            # Use the first channel's mask and times as reference
             if channel_masks:
                 ref_channel = list(imp.channels_data.keys())[0]
                 ref_times = imp.channels_data[ref_channel]['SECONDS'].values
@@ -2844,15 +2861,12 @@ class OBD2MainWindow(QMainWindow):
                 
                 for i, (t, visible) in enumerate(zip(ref_times, ref_mask)):
                     if visible and not in_visible:
-                        # Start of visible region
                         in_visible = True
                         start_time = t
                     elif not visible and in_visible:
-                        # End of visible region
                         in_visible = False
                         visible_intervals.append((start_time, ref_times[i-1]))
                 
-                # Close final interval if still in visible region
                 if in_visible and start_time is not None:
                     visible_intervals.append((start_time, ref_times[-1]))
                 

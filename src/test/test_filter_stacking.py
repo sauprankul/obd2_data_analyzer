@@ -31,9 +31,149 @@ def create_test_channel(times, values):
     return pd.DataFrame({'SECONDS': times, 'VALUE': values})
 
 
+def apply_filters_multi_import(filter_order, filters, imports_data, time_offsets=None):
+    """
+    Apply filters across multiple imports with cross-import synchronization.
+    
+    If ANY import matches a filter at time t, ALL imports show that time range.
+    """
+    INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
+    
+    if time_offsets is None:
+        time_offsets = [0.0] * len(imports_data)
+    
+    # Collect enabled filters in order
+    active_filters = []
+    for name in filter_order:
+        if name in filters and filters[name].get('enabled', True):
+            active_filters.append((name, filters[name]))
+    
+    if not active_filters:
+        return [None] * len(imports_data)
+    
+    # PHASE 1: Collect matching intervals from ALL imports for each filter
+    filter_unified_intervals = {}
+    
+    for filter_name, definition in active_filters:
+        expression = definition['expression']
+        inputs = definition['inputs']
+        buffer_seconds = definition['buffer_seconds']
+        
+        all_matching_times = []
+        
+        for imp_idx, channels_data in enumerate(imports_data):
+            input_a = inputs.get('A', '')
+            if not input_a or input_a not in channels_data:
+                continue
+            
+            df_a = channels_data[input_a]
+            times = df_a['SECONDS'].values
+            
+            aligned_values = {}
+            for label in INPUT_LABELS:
+                input_ch = inputs.get(label, '')
+                if input_ch and input_ch in channels_data:
+                    df = channels_data[input_ch]
+                    times_ch = df['SECONDS'].values
+                    values_raw = df['VALUE'].values
+                    
+                    indices = np.searchsorted(times_ch, times)
+                    indices = np.clip(indices, 1, len(times_ch) - 1)
+                    
+                    diff_before = times - times_ch[indices - 1]
+                    diff_after = times_ch[indices] - times
+                    use_after = diff_after <= diff_before
+                    
+                    aligned = np.where(use_after, values_raw[indices], values_raw[indices - 1])
+                    aligned = np.where(indices == 0, values_raw[0], aligned)
+                    aligned = np.where(indices >= len(times_ch), values_raw[-1], aligned)
+                    
+                    aligned_values[label] = aligned
+                else:
+                    aligned_values[label] = np.zeros(len(times))
+            
+            try:
+                context = {'np': np}
+                context.update(aligned_values)
+                result = eval(expression, {"__builtins__": {}}, context)
+                
+                if isinstance(result, np.ndarray):
+                    bool_mask = result.astype(bool)
+                else:
+                    bool_mask = np.full(len(times), bool(result))
+                
+                # Convert to absolute (display) time
+                # Absolute = local + offset (what's shown on chart)
+                matching_local_times = times[bool_mask]
+                matching_absolute_times = matching_local_times + time_offsets[imp_idx]
+                all_matching_times.extend(matching_absolute_times)
+                
+            except Exception as e:
+                print(f"Error evaluating filter '{filter_name}' for import {imp_idx}: {e}")
+                continue
+        
+        # Merge all matching times into intervals
+        if all_matching_times:
+            intervals = [(t - buffer_seconds, t + buffer_seconds) for t in all_matching_times]
+            intervals.sort(key=lambda x: x[0])
+            merged = [intervals[0]]
+            for start, end in intervals[1:]:
+                if start <= merged[-1][1]:
+                    merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                else:
+                    merged.append((start, end))
+            filter_unified_intervals[filter_name] = merged
+        else:
+            filter_unified_intervals[filter_name] = []
+    
+    # PHASE 2: Apply unified intervals to each import
+    has_any_show = any(defn['mode'] == 'show' for _, defn in active_filters)
+    results = []
+    
+    for imp_idx, channels_data in enumerate(imports_data):
+        channel_masks = {}
+        for ch_name, ch_df in channels_data.items():
+            if has_any_show:
+                channel_masks[ch_name] = np.zeros(len(ch_df), dtype=bool)
+            else:
+                channel_masks[ch_name] = np.ones(len(ch_df), dtype=bool)
+        
+        for filter_name, definition in reversed(active_filters):
+            mode = definition['mode']
+            unified_intervals = filter_unified_intervals.get(filter_name, [])
+            
+            if not unified_intervals:
+                continue
+            
+            # Convert to local time (stored data times)
+            # Local = absolute - offset
+            local_intervals = [(start - time_offsets[imp_idx], end - time_offsets[imp_idx]) 
+                               for start, end in unified_intervals]
+            
+            interval_starts = np.array([iv[0] for iv in local_intervals])
+            interval_ends = np.array([iv[1] for iv in local_intervals])
+            
+            for ch_name, ch_df in channels_data.items():
+                ch_times = ch_df['SECONDS'].values
+                
+                insert_idx = np.searchsorted(interval_starts, ch_times, side='right') - 1
+                in_interval = np.zeros(len(ch_times), dtype=bool)
+                valid_idx = insert_idx >= 0
+                in_interval[valid_idx] = ch_times[valid_idx] <= interval_ends[insert_idx[valid_idx]]
+                
+                if mode == 'show':
+                    channel_masks[ch_name] = channel_masks[ch_name] | in_interval
+                else:
+                    channel_masks[ch_name] = channel_masks[ch_name] & ~in_interval
+        
+        results.append(channel_masks)
+    
+    return results
+
+
 def apply_filters_logic(filter_order, filters, channels_data):
     """
-    Extracted filter application logic for unit testing.
+    Extracted filter application logic for unit testing (single import).
     
     This mirrors the logic in OBD2MainWindow._apply_filters but without UI dependencies.
     """
@@ -455,6 +595,138 @@ class TestFilterOrder:
         assert visible1 == 5, f"Order 1: Expected 5 visible, got {visible1}"
         assert visible2 == 4, f"Order 2: Expected 4 visible, got {visible2}"
         assert visible1 != visible2, "Order should matter!"
+
+
+class TestCrossImportFilterSync:
+    """Test that filter matches from one import apply to all imports."""
+    
+    def test_filter_match_in_one_import_affects_all(self):
+        """If import 1 matches filter at t=5, import 2 should also show t=5."""
+        # Import 1: has a spike at t=5 (value=100)
+        times1 = np.arange(10, dtype=float)
+        values1 = np.array([0, 0, 0, 0, 0, 100, 0, 0, 0, 0], dtype=float)
+        
+        # Import 2: no spike, all zeros
+        times2 = np.arange(10, dtype=float)
+        values2 = np.zeros(10, dtype=float)
+        
+        imports_data = [
+            {'test_channel': create_test_channel(times1, values1)},
+            {'test_channel': create_test_channel(times2, values2)},
+        ]
+        
+        # Filter: show where A > 50 (only import 1 has this at t=5)
+        filter_order = ['show_spike']
+        filters = {
+            'show_spike': {
+                'expression': 'A > 50',
+                'inputs': {'A': 'test_channel'},
+                'mode': 'show',
+                'buffer_seconds': 0.5,
+                'enabled': True
+            }
+        }
+        
+        # Apply filter to both imports using multi-import function
+        results = apply_filters_multi_import(filter_order, filters, imports_data)
+        
+        # Import 1 should have visible points around t=5
+        visible1 = np.sum(results[0]['test_channel'])
+        assert visible1 > 0, "Import 1 should have visible points (has the spike)"
+        
+        # Import 2 should ALSO show points around t=5 because import 1 matched
+        visible2 = np.sum(results[1]['test_channel'])
+        assert visible2 > 0, (
+            f"Import 2 should have visible points because import 1 matched at t=5. "
+            f"Got {visible2} visible points. "
+            f"Filter intervals should be shared across imports."
+        )
+        
+        # Both should have same number of visible points (same time range)
+        assert visible1 == visible2, f"Both imports should show same time range: {visible1} vs {visible2}"
+    
+    def test_filter_with_time_offset(self):
+        """Filter match at t=5 in import 1 should match t=5.5 in import 2 with +0.5s offset."""
+        # Import 1: spike at t=5 (local time = absolute time)
+        times1 = np.arange(10, dtype=float)
+        values1 = np.array([0, 0, 0, 0, 0, 100, 0, 0, 0, 0], dtype=float)
+        
+        # Import 2: same local times, but offset by +0.5s
+        # So import 2's local t=5 corresponds to absolute t=5.5
+        # And absolute t=5 corresponds to import 2's local t=4.5
+        times2 = np.arange(10, dtype=float)
+        values2 = np.zeros(10, dtype=float)
+        
+        imports_data = [
+            {'test_channel': create_test_channel(times1, values1)},
+            {'test_channel': create_test_channel(times2, values2)},
+        ]
+        time_offsets = [0.0, 0.5]  # Import 2 is offset by +0.5s
+        
+        filter_order = ['show_spike']
+        filters = {
+            'show_spike': {
+                'expression': 'A > 50',
+                'inputs': {'A': 'test_channel'},
+                'mode': 'show',
+                'buffer_seconds': 0.5,
+                'enabled': True
+            }
+        }
+        
+        # Apply with offsets
+        results = apply_filters_multi_import(filter_order, filters, imports_data, time_offsets)
+        
+        # Import 1 matches at local t=5 (absolute t=5)
+        visible1 = np.sum(results[0]['test_channel'])
+        assert visible1 > 0, "Import 1 should have visible points"
+        
+        # Import 2 should show points around local t=5.5 (absolute t=5 + offset 0.5)
+        # With buffer 0.5s, the interval is [4.5, 5.5] in absolute time
+        # For import 2 (offset +0.5), local interval is [5.0, 6.0]
+        visible2 = np.sum(results[1]['test_channel'])
+        assert visible2 > 0, (
+            f"Import 2 should have visible points at local t=5-6 (absolute t=4.5-5.5). "
+            f"Got {visible2} visible points."
+        )
+    
+    def test_hide_filter_cross_import(self):
+        """Hide filter match in one import should hide from all imports."""
+        # Import 1: has a spike at t=5
+        times1 = np.arange(10, dtype=float)
+        values1 = np.array([0, 0, 0, 0, 0, 100, 0, 0, 0, 0], dtype=float)
+        
+        # Import 2: no spike
+        times2 = np.arange(10, dtype=float)
+        values2 = np.zeros(10, dtype=float)
+        
+        imports_data = [
+            {'test_channel': create_test_channel(times1, values1)},
+            {'test_channel': create_test_channel(times2, values2)},
+        ]
+        
+        # Hide filter: hide where A > 50 (only import 1 has this at t=5)
+        filter_order = ['hide_spike']
+        filters = {
+            'hide_spike': {
+                'expression': 'A > 50',
+                'inputs': {'A': 'test_channel'},
+                'mode': 'hide',
+                'buffer_seconds': 0.5,
+                'enabled': True
+            }
+        }
+        
+        results = apply_filters_multi_import(filter_order, filters, imports_data)
+        
+        # Both imports should have t=5 hidden
+        # Import 1: 10 points - 1 hidden = 9 visible
+        visible1 = np.sum(results[0]['test_channel'])
+        assert visible1 == 9, f"Import 1 should have 9 visible (t=5 hidden), got {visible1}"
+        
+        # Import 2: should also have t=5 hidden because import 1 matched
+        visible2 = np.sum(results[1]['test_channel'])
+        assert visible2 == 9, f"Import 2 should also have 9 visible (t=5 hidden), got {visible2}"
 
 
 if __name__ == '__main__':
