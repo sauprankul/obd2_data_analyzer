@@ -1,6 +1,6 @@
-# PowerShell launcher for OBD Data Viewer
-Write-Host "OBD Data Viewer - Dash Edition" -ForegroundColor Green
-Write-Host "================================" -ForegroundColor Green
+# PowerShell launcher for OBD2 Data Visualization Tool
+Write-Host "OBD2 Data Visualization Tool" -ForegroundColor Green
+Write-Host "=============================" -ForegroundColor Green
 
 # Check if Python is installed
 try {
@@ -34,18 +34,18 @@ try {
     exit 1
 }
 
-# Add src to Python path and run the working Dash viewer
-Write-Host "Starting OBD Data Viewer..." -ForegroundColor Blue
+# Run the new OBD2 viewer application
+Write-Host "Starting OBD2 Data Visualization Tool..." -ForegroundColor Blue
 Write-Host "This will open in your web browser at http://localhost:8052" -ForegroundColor Yellow
 Write-Host "Press Ctrl+C to stop the server" -ForegroundColor Yellow
 Write-Host ""
 
 try {
-    python src\working_viewer.py
+    python src\obd2_main.py
 } catch {
-    Write-Host "Error running the viewer" -ForegroundColor Red
+    Write-Host "Error running the OBD2 Data Visualization Tool" -ForegroundColor Red
     Read-Host "Press Enter to exit"
     exit 1
 }
 
-Write-Host "OBD Data Viewer closed successfully" -ForegroundColor Green
+Write-Host "OBD2 Data Visualization Tool closed successfully" -ForegroundColor Green

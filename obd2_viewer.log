@@ -1,0 +1,246 @@
+2025-12-05 16:43:50,695 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:43:50,748 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:43:50,750 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 16:43:53,643 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:43:53,704 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:46:07,897 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:46:07,946 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:46:07,949 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 16:46:10,419 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:46:10,465 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:47:24,161 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Distance_travelled_(total).csv
+2025-12-05 16:47:24,162 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Engine_RPM.csv
+2025-12-05 16:47:24,164 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Engine_RPM_x1000.csv
+2025-12-05 16:47:24,164 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Fuel_Air_commanded_equivalence_ratio.csv
+2025-12-05 16:47:24,165 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Fuel_Rail_Pressure.csv
+2025-12-05 16:47:24,167 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Absolute_Evap_system_Vapor_pressure.csv
+2025-12-05 16:47:24,167 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Average_speed.csv
+2025-12-05 16:47:24,168 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Barometric_pressure.csv
+2025-12-05 16:47:24,169 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Calculated_boost.csv
+2025-12-05 16:47:24,170 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Calculated_engine_load_value.csv
+2025-12-05 16:47:24,171 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Commanded_evaporative_purge.csv
+2025-12-05 16:47:24,172 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Fuel_System_A_Use_Percentage_Bank_1.csv
+2025-12-05 16:47:24,173 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Fuel_System_B_Use_Percentage_Bank_1.csv
+2025-12-05 16:47:24,175 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Intake_manifold_absolute_pressure.csv
+2025-12-05 16:47:24,176 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Intake_air_temperature.csv
+2025-12-05 16:47:24,178 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Long_term_fuel_%_trim___Bank_1.csv
+2025-12-05 16:47:24,179 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\MAF_air_flow_rate.csv
+2025-12-05 16:47:24,181 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Oxygen_sensor_1_Wide_Range_Equivalence_ratio.csv
+2025-12-05 16:47:24,182 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Oxygen_sensor_1_Wide_Range_Voltage.csv
+2025-12-05 16:47:24,183 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Oxygen_sensor_2_Bank_1_Short_term_fuel_trim.csv
+2025-12-05 16:47:24,185 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Oxygen_sensor_2_Bank_1_Voltage.csv
+2025-12-05 16:47:24,187 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Power_from_MAF.csv
+2025-12-05 16:47:24,188 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Relative_accelerator_pedal_position.csv
+2025-12-05 16:47:24,190 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Timing_advance.csv
+2025-12-05 16:47:24,190 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Vehicle_speed.csv
+2025-12-05 16:47:24,192 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Short_term_fuel_%_trim___Bank_1.csv
+2025-12-05 16:47:24,193 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Vehicle_acceleration.csv
+2025-12-05 16:47:24,195 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Commanded_Fuel_Rail_Pressure_.csv
+2025-12-05 16:47:24,197 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_\Distance_travelled.csv
+2025-12-05 16:47:24,199 - obd2_viewer.core.data_loader - INFO - Found 29 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_
+2025-12-05 16:47:24,224 - obd2_viewer.core.data_loader - INFO - Successfully loaded Absolute_Evap_system_Vapor_pressure.csv as PID 'Absolute_Evap_system_Vapor_pressure'
+2025-12-05 16:47:24,247 - obd2_viewer.core.data_loader - INFO - Successfully loaded Average_speed.csv as PID 'Average_speed'
+2025-12-05 16:47:24,253 - obd2_viewer.core.data_loader - INFO - Successfully loaded Barometric_pressure.csv as PID 'Barometric_pressure'
+2025-12-05 16:47:24,280 - obd2_viewer.core.data_loader - INFO - Successfully loaded Calculated_boost.csv as PID 'Calculated_boost'
+2025-12-05 16:47:24,308 - obd2_viewer.core.data_loader - INFO - Successfully loaded Calculated_engine_load_value.csv as PID 'Calculated_engine_load_value'
+2025-12-05 16:47:24,333 - obd2_viewer.core.data_loader - INFO - Successfully loaded Commanded_evaporative_purge.csv as PID 'Commanded_evaporative_purge'
+2025-12-05 16:47:24,357 - obd2_viewer.core.data_loader - INFO - Successfully loaded Commanded_Fuel_Rail_Pressure_.csv as PID 'Commanded_Fuel_Rail_Pressure'
+2025-12-05 16:47:24,372 - obd2_viewer.core.data_loader - INFO - Successfully loaded Distance_travelled.csv as PID 'Distance_travelled'
+2025-12-05 16:47:24,387 - obd2_viewer.core.data_loader - INFO - Successfully loaded Distance_travelled_(total).csv as PID 'Distance_travelled_total'
+2025-12-05 16:47:24,401 - obd2_viewer.core.data_loader - INFO - Successfully loaded Engine_RPM.csv as PID 'Engine_RPM'
+2025-12-05 16:47:24,414 - obd2_viewer.core.data_loader - INFO - Successfully loaded Engine_RPM_x1000.csv as PID 'Engine_RPM_x1000'
+2025-12-05 16:47:24,427 - obd2_viewer.core.data_loader - INFO - Successfully loaded Fuel_Air_commanded_equivalence_ratio.csv as PID 'FuelAir_commanded_equivalence_ratio'
+2025-12-05 16:47:24,442 - obd2_viewer.core.data_loader - INFO - Successfully loaded Fuel_Rail_Pressure.csv as PID 'Fuel_Rail_Pressure'
+2025-12-05 16:47:24,457 - obd2_viewer.core.data_loader - INFO - Successfully loaded Fuel_System_A_Use_Percentage_Bank_1.csv as PID 'Fuel_System_A_Use_Percentage_Bank_1'
+2025-12-05 16:47:24,469 - obd2_viewer.core.data_loader - INFO - Successfully loaded Fuel_System_B_Use_Percentage_Bank_1.csv as PID 'Fuel_System_B_Use_Percentage_Bank_1'
+2025-12-05 16:47:24,482 - obd2_viewer.core.data_loader - INFO - Successfully loaded Intake_air_temperature.csv as PID 'Intake_air_temperature'
+2025-12-05 16:47:24,496 - obd2_viewer.core.data_loader - INFO - Successfully loaded Intake_manifold_absolute_pressure.csv as PID 'Intake_manifold_absolute_pressure'
+2025-12-05 16:47:24,511 - obd2_viewer.core.data_loader - INFO - Successfully loaded Long_term_fuel_%_trim___Bank_1.csv as PID 'Long_term_fuel__trim___Bank_1'
+2025-12-05 16:47:24,524 - obd2_viewer.core.data_loader - INFO - Successfully loaded MAF_air_flow_rate.csv as PID 'MAF_air_flow_rate'
+2025-12-05 16:47:24,537 - obd2_viewer.core.data_loader - INFO - Successfully loaded Oxygen_sensor_1_Wide_Range_Equivalence_ratio.csv as PID 'Oxygen_sensor_1_Wide_Range_Equivalence_ratio'
+2025-12-05 16:47:24,551 - obd2_viewer.core.data_loader - INFO - Successfully loaded Oxygen_sensor_1_Wide_Range_Voltage.csv as PID 'Oxygen_sensor_1_Wide_Range_Voltage'
+2025-12-05 16:47:24,563 - obd2_viewer.core.data_loader - INFO - Successfully loaded Oxygen_sensor_2_Bank_1_Short_term_fuel_trim.csv as PID 'Oxygen_sensor_2_Bank_1_Short_term_fuel_trim'
+2025-12-05 16:47:24,576 - obd2_viewer.core.data_loader - INFO - Successfully loaded Oxygen_sensor_2_Bank_1_Voltage.csv as PID 'Oxygen_sensor_2_Bank_1_Voltage'
+2025-12-05 16:47:24,590 - obd2_viewer.core.data_loader - INFO - Successfully loaded Power_from_MAF.csv as PID 'Power_from_MAF'
+2025-12-05 16:47:24,604 - obd2_viewer.core.data_loader - INFO - Successfully loaded Relative_accelerator_pedal_position.csv as PID 'Relative_accelerator_pedal_position'
+2025-12-05 16:47:24,617 - obd2_viewer.core.data_loader - INFO - Successfully loaded Short_term_fuel_%_trim___Bank_1.csv as PID 'Short_term_fuel__trim___Bank_1'
+2025-12-05 16:47:24,630 - obd2_viewer.core.data_loader - INFO - Successfully loaded Timing_advance.csv as PID 'Timing_advance'
+2025-12-05 16:47:24,643 - obd2_viewer.core.data_loader - INFO - Successfully loaded Vehicle_acceleration.csv as PID 'Vehicle_acceleration'
+2025-12-05 16:47:24,657 - obd2_viewer.core.data_loader - INFO - Successfully loaded Vehicle_speed.csv as PID 'Vehicle_speed'
+2025-12-05 16:47:24,658 - obd2_viewer.core.data_loader - INFO - Loaded 29 valid PIDs from 29 files
+2025-12-05 16:47:24,712 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 PIDs from C:\Users\skwis\AppData\Local\Temp\tmpxtnxmi3_
+2025-12-05 16:48:04,980 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:48:05,035 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:48:05,037 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 16:48:07,573 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:48:07,620 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:49:18,392 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:49:18,451 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:49:18,453 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 16:49:20,897 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 16:49:20,943 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 16:49:25,867 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_timing_advance.csv
+2025-12-05 16:49:25,868 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_vehicle_speed.csv
+2025-12-05 16:49:25,874 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_air_fuel_ratio.csv
+2025-12-05 16:49:25,875 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_coolant_temp.csv
+2025-12-05 16:49:25,876 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_engine_rpm.csv
+2025-12-05 16:49:25,877 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_fuel_pressure.csv
+2025-12-05 16:49:25,878 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_fuel_trim_long.csv
+2025-12-05 16:49:25,879 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_fuel_trim_short.csv
+2025-12-05 16:49:25,880 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_intake_air_temp.csv
+2025-12-05 16:49:25,881 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_load.csv
+2025-12-05 16:49:25,882 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_maf_airflow.csv
+2025-12-05 16:49:25,882 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_o2_sensor.csv
+2025-12-05 16:49:25,883 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s\test_data_throttle_pos.csv
+2025-12-05 16:49:25,885 - obd2_viewer.core.data_loader - INFO - Found 13 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s
+2025-12-05 16:49:25,892 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_air_fuel_ratio.csv as PID 'Air_Fuel_Ratio'
+2025-12-05 16:49:25,894 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_coolant_temp.csv as PID 'Coolant_Temperature'
+2025-12-05 16:49:25,898 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_engine_rpm.csv as PID 'Engine_RPM'
+2025-12-05 16:49:25,912 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_fuel_pressure.csv as PID 'Fuel_Pressure'
+2025-12-05 16:49:25,923 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_fuel_trim_long.csv as PID 'Long_Term_Fuel_Trim'
+2025-12-05 16:49:25,934 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_fuel_trim_short.csv as PID 'Short_Term_Fuel_Trim'
+2025-12-05 16:49:25,948 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_intake_air_temp.csv as PID 'Intake_Air_Temperature'
+2025-12-05 16:49:25,960 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_load.csv as PID 'Engine_Load'
+2025-12-05 16:49:25,974 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_maf_airflow.csv as PID 'MAF_Airflow_Rate'
+2025-12-05 16:49:25,986 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_o2_sensor.csv as PID 'O2_Sensor_Voltage'
+2025-12-05 16:49:26,002 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_throttle_pos.csv as PID 'Throttle_Position'
+2025-12-05 16:49:26,013 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_timing_advance.csv as PID 'Timing_Advance'
+2025-12-05 16:49:26,017 - obd2_viewer.core.data_loader - INFO - Successfully loaded test_data_vehicle_speed.csv as PID 'Vehicle_Speed'
+2025-12-05 16:49:26,017 - obd2_viewer.core.data_loader - INFO - Loaded 13 valid PIDs from 13 files
+2025-12-05 16:49:26,065 - obd2_viewer.app.main_application - INFO - Created dashboard with 13 PIDs from C:\Users\skwis\AppData\Local\Temp\tmpdyyhqk4s
+2025-12-05 17:29:07,175 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:29:07,276 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:29:17,850 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:29:17,900 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:29:48,787 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:29:48,848 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:29:48,851 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 17:29:51,958 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:29:52,007 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:30:38,262 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmps8qb_2f4\Car_scanner_nov_4.csv
+2025-12-05 17:30:38,263 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmps8qb_2f4
+2025-12-05 17:30:38,264 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:30:38,306 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:30:38,503 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:30:38,503 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:30:38,503 - obd2_viewer.app.main_application - ERROR - Error creating dashboard: 'OBDDataLoader' object has no attribute 'get_units'
+2025-12-05 17:30:56,932 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:30:56,934 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:30:57,013 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:31:06,013 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpeackvbme\Car_scanner_nov_4.csv
+2025-12-05 17:31:06,015 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpeackvbme
+2025-12-05 17:31:06,016 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:31:06,048 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:31:06,198 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:31:06,199 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:31:06,274 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmpeackvbme
+2025-12-05 17:33:19,877 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:33:19,942 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:33:19,943 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-05 17:33:22,798 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:33:22,842 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:34:23,197 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpwxkz7ic5\Car_scanner_nov_4.csv
+2025-12-05 17:34:23,199 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpwxkz7ic5
+2025-12-05 17:34:23,199 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:34:23,233 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:34:23,385 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:34:23,385 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:34:23,496 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmpwxkz7ic5
+2025-12-05 17:36:03,017 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:36:03,094 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:36:07,855 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:36:07,906 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:36:13,121 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:36:13,172 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:36:38,512 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmp0tmz2afl\Car_scanner_nov_4.csv
+2025-12-05 17:36:38,514 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmp0tmz2afl
+2025-12-05 17:36:38,514 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:36:38,551 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:36:38,702 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:36:38,703 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:36:38,822 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmp0tmz2afl
+2025-12-05 17:37:19,840 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:37:19,904 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:37:26,421 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:37:26,482 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:37:42,452 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpd1uin5ra\Car_scanner_nov_4.csv
+2025-12-05 17:37:42,453 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpd1uin5ra
+2025-12-05 17:37:42,454 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:37:42,493 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:37:42,696 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:37:42,697 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:37:42,834 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmpd1uin5ra
+2025-12-05 17:38:15,815 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:38:15,883 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:38:43,723 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpfdyze27z\Car_scanner_nov_4.csv
+2025-12-05 17:38:43,725 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpfdyze27z
+2025-12-05 17:38:43,726 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: Car_scanner_nov_4.csv (0.8MB)
+2025-12-05 17:38:43,771 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:38:43,956 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:38:43,957 - obd2_viewer.core.data_loader - INFO - Successfully loaded Car_scanner_nov_4.csv with 29 channels
+2025-12-05 17:38:44,130 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmpfdyze27z
+2025-12-05 17:42:54,585 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:42:54,633 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:42:59,887 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:42:59,932 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:43:46,886 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:43:46,941 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:44:18,289 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:44:18,349 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:56:42,603 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmp4tvmmi5n\nov_4_test_data.csv
+2025-12-05 17:56:42,605 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmp4tvmmi5n
+2025-12-05 17:56:42,605 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-05 17:56:42,639 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:56:42,797 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:56:42,798 - obd2_viewer.core.data_loader - INFO - Successfully loaded nov_4_test_data.csv with 29 channels
+2025-12-05 17:56:42,877 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmp4tvmmi5n
+2025-12-05 17:57:08,499 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:57:08,554 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:57:22,802 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:57:22,872 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:57:40,511 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:57:40,556 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:57:56,285 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:57:56,333 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:58:10,806 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 17:58:10,863 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 17:58:40,140 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmp3evq25fg\nov_4_test_data.csv
+2025-12-05 17:58:40,142 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmp3evq25fg
+2025-12-05 17:58:40,142 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-05 17:58:40,177 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:58:40,330 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:58:40,330 - obd2_viewer.core.data_loader - INFO - Successfully loaded nov_4_test_data.csv with 29 channels
+2025-12-05 17:58:40,446 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmp3evq25fg
+2025-12-05 17:58:49,281 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmpk2s49_76\nov_4_test_data.csv
+2025-12-05 17:58:49,283 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmpk2s49_76
+2025-12-05 17:58:49,283 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-05 17:58:49,314 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 17:58:49,482 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 17:58:49,482 - obd2_viewer.core.data_loader - INFO - Successfully loaded nov_4_test_data.csv with 29 channels
+2025-12-05 17:58:49,569 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmpk2s49_76
+2025-12-05 18:00:00,131 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-05 18:00:00,196 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-05 18:00:15,312 - obd2_viewer.app.main_application - INFO - Saved file: C:\Users\skwis\AppData\Local\Temp\tmp9fckvld7\nov_4_test_data.csv
+2025-12-05 18:00:15,313 - obd2_viewer.core.data_loader - INFO - Found 1 CSV files in C:\Users\skwis\AppData\Local\Temp\tmp9fckvld7
+2025-12-05 18:00:15,314 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-05 18:00:15,348 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-05 18:00:15,513 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-05 18:00:15,513 - obd2_viewer.core.data_loader - INFO - Successfully loaded nov_4_test_data.csv with 29 channels
+2025-12-05 18:00:15,641 - obd2_viewer.app.main_application - INFO - Created dashboard with 29 channels from C:\Users\skwis\AppData\Local\Temp\tmp9fckvld7
+2025-12-11 18:27:42,965 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-11 18:27:43,109 - obd2_viewer.database.connection - INFO - Created database engine for localhost:5432/obd2_data
+2025-12-11 18:27:43,190 - obd2_viewer.database.connection - INFO - Database connection test successful
+2025-12-11 18:27:43,193 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-11 18:27:43,194 - dash.dash - INFO - Dash is running on http://127.0.0.1:8052/
+
+2025-12-11 18:27:46,050 - __main__ - INFO - Starting OBD2 Data Visualization Tool
+2025-12-11 18:27:46,116 - obd2_viewer.database.connection - INFO - Created database engine for localhost:5432/obd2_data
+2025-12-11 18:27:46,153 - obd2_viewer.database.connection - INFO - Database connection test successful
+2025-12-11 18:27:46,156 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
+2025-12-11 18:27:58,129 - obd2_viewer.app.main_application - INFO - Loaded import 'Nov 4 gurdwara' with 29 channels
