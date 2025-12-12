@@ -21,7 +21,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QLineEdit, QCheckBox, QGroupBox, QDoubleSpinBox,
     QStatusBar, QMenuBar, QMenu, QToolBar, QApplication, QSizePolicy,
     QDialog, QListWidget, QListWidgetItem, QStackedWidget, QGridLayout,
-    QComboBox
+    QComboBox, QColorDialog
 )
 from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer, QStringListModel, QThread
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont, QColor, QMovie
@@ -258,11 +258,28 @@ class ChannelControlWidget(QWidget):
         layout.addWidget(self.checkbox, 1)
 
 
+class ClickableColorLabel(QLabel):
+    """A clickable color indicator label."""
+    clicked = pyqtSignal(int)  # Emits import index
+    
+    def __init__(self, import_index: int, parent=None):
+        super().__init__(parent)
+        self.import_index = import_index
+        self.setCursor(Qt.CursorShape.PointingHandCursor)
+    
+    def mousePressEvent(self, event):
+        if event.button() == Qt.MouseButton.LeftButton:
+            self.clicked.emit(self.import_index)
+        super().mousePressEvent(event)
+
+
 class ImportLegendWidget(QWidget):
     """Widget showing the legend mapping filenames to colors with duration, offset, and sync buttons."""
     
     # Signal: import_index for sync button clicked
     sync_requested = pyqtSignal(int)
+    # Signal: import_index for color change requested
+    color_change_requested = pyqtSignal(int)
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -304,10 +321,12 @@ class ImportLegendWidget(QWidget):
             row1 = QHBoxLayout()
             row1.setSpacing(4)
             
-            # Color indicator
-            color_label = QLabel()
+            # Color indicator (clickable)
+            color_label = ClickableColorLabel(i)
             color_label.setFixedSize(14, 14)
             color_label.setStyleSheet(f"background-color: {imp.color}; border-radius: 7px;")
+            color_label.setToolTip("Click to change color")
+            color_label.clicked.connect(self.color_change_requested.emit)
             row1.addWidget(color_label)
             
             # Filename
@@ -1802,6 +1821,8 @@ class OBD2MainWindow(QMainWindow):
         
         # Import legend sync button
         self.import_legend.sync_requested.connect(self._show_synchronize_dialog)
+        # Import legend color change
+        self.import_legend.color_change_requested.connect(self._show_color_picker)
         
         # Chart time range changes
         self.chart_widget.time_range_changed.connect(self._on_chart_time_changed)
@@ -2200,6 +2221,26 @@ class OBD2MainWindow(QMainWindow):
             self.chart_widget.update_import_offset(import_index, new_offset)
             # Update the offset display in the legend
             self.import_legend.update_offset(import_index, new_offset)
+    
+    def _show_color_picker(self, import_index: int):
+        """Show color picker dialog for an import."""
+        if import_index >= len(self.imports):
+            return
+        
+        imp = self.imports[import_index]
+        current_color = QColor(imp.color)
+        
+        color = QColorDialog.getColor(current_color, self, f"Choose Color for {imp.filename}")
+        
+        if color.isValid():
+            new_color = color.name()
+            imp.color = new_color
+            # Update chart widget
+            self.chart_widget.update_import_color(import_index, new_color)
+            # Update legend
+            self.import_legend.update_legend(self.imports)
+            # Update channel controls (they show import colors)
+            self._update_channel_controls_multi(preserve_visibility=True)
     
     def _show_math_channel_dialog(self, edit_channel: str = None):
         """Show dialog to create or edit a math channel."""

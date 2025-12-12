@@ -218,6 +218,17 @@ class ChannelPlotWidget(pg.PlotWidget):
             x_display, y_display = self._apply_lod(data['x'], data['y'], offset)
             self.data_lines[import_index].setData(x_display, y_display)
     
+    def update_import_color(self, import_index: int, color: str):
+        """Update the color for a specific import."""
+        if import_index >= len(self.import_data):
+            return
+        
+        self.import_colors[import_index] = color
+        
+        if self.data_lines[import_index]:
+            pen = pg.mkPen(color=color, width=2)
+            self.data_lines[import_index].setPen(pen)
+    
     def set_x_range(self, x_min: float, x_max: float):
         """Set the X axis range."""
         self.setXRange(x_min, x_max, padding=0)
@@ -567,6 +578,14 @@ class OBD2ChartWidget(QWidget):
             
             for channel, plot in self.plots.items():
                 plot.update_import_offset(import_index, offset)
+    
+    def update_import_color(self, import_index: int, color: str):
+        """Update the color for a specific import."""
+        if import_index < len(self.imports):
+            self.imports[import_index].color = color
+            
+            for channel, plot in self.plots.items():
+                plot.update_import_color(import_index, color)
     
     def show_all_channels(self):
         """Show all channels for all imports."""
