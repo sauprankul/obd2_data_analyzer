@@ -2,7 +2,13 @@
 
 ## Overview
 
-A professional web-based tool for importing, processing, and visualizing OBD2 (On-Board Diagnostics) CSV data with support for multiple imports, mathematical channel creation, and persistent visualization snapshots.
+A professional **native Windows application** for importing, processing, and visualizing OBD2 (On-Board Diagnostics) CSV data with support for multiple imports, mathematical channel creation, and persistent visualization snapshots.
+
+**Technology Stack (Native App):**
+- Python 3.8+
+- PyQt6 for native Windows GUI
+- PyQtGraph for hardware-accelerated charting
+- No browser required - pure native desktop application
 
 ## Feature Groups
 
@@ -14,26 +20,21 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 - Multi-channel CSV support (interleaved rows like Car_scanner_nov_4.csv)
 - Automatic channel detection and separation
 - User-provided import naming
-- Validation to prevent duplicate channel names across files
-- RDB storage of import objects
+- Validation to prevent duplicate imports (by absolute file path)
+- **Past Imports list on home screen** (cached file paths, not data)
+- No database storage of actual CSV data - only file path references
 
-**Implementation Status:** ✅ Multi-channel CSV parsing implemented
-**Known Issues:** 
-- ❌ No RDB persistence layer (schema exists, no Python connection layer)
-- ⚠️ Basic import validation only (file size, required columns)
-
+**Implementation Status:** ✅ Fully Implemented (Native App)
 **Current Working Components:**
 - ✅ MultiChannelCSVParser handles interleaved CSVs correctly
 - ✅ Data interpolation to common time grid
 - ✅ Channel separation and unit extraction
 - ✅ Backend creates 29+ channels from test data
-- ✅ Frontend callbacks now working (fixed Dec 2024)
+- ✅ Native file dialogs for CSV selection
+- ✅ Recent files list with persistence
+- ⚠️ Past Imports home screen (pending)
 
-**Questions for Implementation:**
-1. What RDB system should we use? (SQLite for simplicity, PostgreSQL for scalability?)
-2. Should imports be stored as file paths or actual binary data?
-3. How should we handle very large CSV files (>1GB)?
-4. Should we support CSV preview before import confirmation?
+**Design Decision:** Store file paths only, not actual data. Re-parse CSV on each load for simplicity and to avoid data duplication.
 
 #### 1.2 Multi-Channel Processing
 **Requirements:**
@@ -70,25 +71,25 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 #### 2.1 Multi-Graph Display
 **Requirements:**
 - Each channel displayed on separate graph
-- Adjustable graph heights
+- Adjustable graph heights (180-220px per chart)
 - Configurable time window (x-axis)
 - Scrollable graph area for unlimited channels
 - No graph overlap regardless of zoom level
 - Responsive layout with minimal whitespace
+- **Synchronized crosshair** - clicking on one chart shows values for all charts at that x position
+- **Channel title shows current value** when crosshair is positioned
+- **Scroll wheel zoom capped** to prevent zooming beyond data range
 
-**Implementation Status:** ✅ Working
+**Implementation Status:** ✅ Fully Implemented (Native App)
 **Current Working Components:**
-- ✅ OBD2Dashboard creates figures with all 29 channels
-- ✅ Plotly traces generated correctly with proper data
-- ✅ Time range and zoom functionality works
-- ✅ Dash callbacks working (fixed Dec 2024)
-- ✅ Graphs display correctly in browser
-- ⚠️ Uses subplots (not individual scrollable graphs yet)
-
-**Questions for Implementation:**
-1. Should we use individual Plotly graphs or stick with subplots?
-2. How should we handle graph height persistence?
-3. Should there be minimum/maximum height limits?
+- ✅ PyQtGraph-based individual channel plots
+- ✅ Hardware-accelerated OpenGL rendering
+- ✅ Synchronized X-axis across all plots
+- ✅ Click-to-position crosshair with synchronized values
+- ✅ Channel titles display value at crosshair position
+- ✅ Scrollable plot container
+- ✅ 15px spacing between charts for readability
+- ✅ Scroll wheel zoom capped to data range
 
 #### 2.2 Time Navigation Controls
 **Requirements:**
@@ -128,19 +129,16 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 
 #### 3.1 Responsive Layout System
 **Requirements:**
-- Drag-adjustable sidebar:graphs ratio
+- Drag-adjustable sidebar:graphs ratio via QSplitter
 - Responsive design for vertical screens
-- Sidebar repositioning (left/top)
 - Maximum screen utilization
 - Clean, professional interface
 
-**Implementation Status:** ❌ Not Implemented
-**Known Issues:** Fixed layout, no responsiveness
-
-**Questions for Implementation:**
-1. Should we use CSS Grid or Flexbox for layout?
-2. How should we handle layout persistence across sessions?
-3. Minimum sidebar width requirements?
+**Implementation Status:** ✅ Implemented (Native App)
+**Current Working Components:**
+- ✅ QSplitter for drag-adjustable sidebar:charts ratio
+- ✅ Splitter state persisted across sessions
+- ✅ Window geometry persistence
 
 #### 3.2 Sidebar Controls
 **Requirements:**
@@ -194,57 +192,85 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 
 #### 5.1 Import Management
 **Requirements:**
-- Multiple imports in single visualization
-- Independent time controls per import
-- Synchronized time windows
-- Color coding per import
-- Import merging functionality
+- Multiple imports in single visualization via "Add Import" button
+- Prevent duplicate imports (compare by absolute file path)
+- Color coding per import (distinct color per CSV file)
+- Legend in sidebar showing filename → color mapping
+- Each channel has N checkboxes (one per imported CSV)
+- Base import (first loaded) defines the time window
+- Additional imports clipped to base import's time range
 
-**Implementation Status:** ❌ Not Implemented
-**Known Issues:** Single import only
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+- ✅ Single import visualization working
+- ✅ Multi-import support via "Add Import" button
+- ✅ Per-import color coding (8 distinct colors)
+- ✅ Legend with filename-color mapping in sidebar
+- ✅ Duplicate import prevention (by absolute path)
+- ✅ Per-channel checkboxes for each import
 
-**Questions for Implementation:**
-1. How should we handle imports with different channel sets?
-2. Should imports be able to be removed individually?
-3. How to handle time zone differences between imports?
-
-#### 5.2 Channel Consolidation
+#### 5.2 Time Synchronization Panel
 **Requirements:**
-- Same channel names plotted on same graph
-- Different colors per import
-- Legend showing import sources
-- Hover information with import details
+- "Synchronize" button enabled when 2+ imports loaded
+- Opens floating control panel
+- First import is the "base" - cannot be shifted
+- Each additional import has its own ±0.1s to ±5min shift buttons
+- Shifting adjusts that import's time offset relative to base
+- All imports share the same visible time window (base's range)
+- If secondary import has less data, line simply ends
+- If secondary import has more data, excess is not plotted
 
-**Implementation Status:** ❌ Not Implemented
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+- ✅ Synchronize button in Time Navigation (enabled with 2+ imports)
+- ✅ Floating SynchronizeDialog with offset controls
+- ✅ Base import fixed at 0.0s offset
+- ✅ Full shift button set (±0.1s to ±5min) for each additional import
+- ✅ Real-time offset updates reflected in charts
 
-### 6. Persistence & Snapshots
-
-#### 6.1 Visualization Snapshots
+#### 5.3 Channel Consolidation
 **Requirements:**
-- Save complete visualization state
-- Graph heights and zoom levels
-- Time ranges per import
-- Math channels
-- Color schemes
-- Renameable snapshots
-- Snapshot listing on home screen
+- Same channel names from different imports plotted on same graph
+- Different colors per import (consistent across all channels)
+- Legend showing import sources with colors
+- Click shows values from all imports at that x position
 
-**Implementation Status:** ❌ Not Implemented
-**Known Issues:** No persistence layer
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+- ✅ Same channels consolidated on single graph with multiple lines
+- ✅ Consistent colors per import across all channels
+- ✅ Import legend in sidebar
+- ✅ Click shows color-coded values from all imports
 
-**Questions for Implementation:**
-1. Should snapshots store actual data or just references?
-2. How should we handle snapshot sharing between users?
-3. Export/import snapshot functionality?
+### 6. Persistence & Caching
 
-#### 6.2 Import Management
+#### 6.1 Past Imports (Home Screen)
 **Requirements:**
-- List of available imports on home screen
-- Import metadata display
-- Import deletion/archiving
-- Import sharing between snapshots
+- Home screen shows list of previously imported CSV files
+- Store file paths only (not actual data)
+- Display filename, path, last accessed date
+- Click to re-open in visualization view
+- Clear individual entries or clear all
+- Persist across application restarts (QSettings)
 
-**Implementation Status:** ❌ Not Implemented
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+- ✅ Recent files menu in native app
+- ✅ Dedicated home screen with Past Imports list
+- ✅ Double-click to open past import
+- ✅ Clear History button
+- ✅ Persisted via QSettings
+
+#### 6.2 Window State Persistence
+**Requirements:**
+- Remember window size and position
+- Remember splitter ratios
+- Remember last opened file/folder
+
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+- ✅ Window geometry saved/restored via QSettings
+- ✅ Splitter state persisted
 
 ### 7. Data Processing & Validation
 
@@ -297,27 +323,20 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 **Implementation Status:** ⚠️ Partially Implemented
 **Known Issues:** Performance degrades with many channels
 
-## Technical Architecture Questions
+## Technical Architecture
 
-### Database Schema
-1. Should we use SQLite for simplicity or PostgreSQL for scalability?
-2. How to store large CSV data - file paths or binary blobs?
-3. Indexing strategy for time-series data?
+### Native Application Stack
+- **GUI Framework:** PyQt6 - mature, native Windows widgets
+- **Charting:** PyQtGraph - OpenGL-accelerated, handles millions of points
+- **Data Processing:** pandas, numpy, scipy
+- **Persistence:** QSettings for preferences, JSON for recent files
+- **No database required** - CSV files re-parsed on load
 
-### Frontend Framework
-1. Continue with Dash or consider React/Vue for better performance?
-2. How to handle state management across multiple imports?
-3. Real-time data streaming requirements?
-
-### Backend Architecture
-1. Monolithic application or microservices?
-2. API design for data import/export?
-3. Authentication and user management?
-
-### Deployment
-1. Cloud deployment strategy (AWS, GCP, Azure)?
-2. Container requirements (Docker)?
-3. Scaling strategy for multiple users?
+### Design Decisions
+1. **File paths only** - Don't store CSV data in database, just paths
+2. **Re-parse on load** - Simpler than maintaining data sync
+3. **Single-process** - No client/server architecture needed
+4. **Native widgets** - No web browser overhead
 
 ## Implementation Priority
 
@@ -360,17 +379,15 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 
 ## Known Limitations
 
-1. **Current Implementation:** Single import only, fixed layout, no persistence
+1. **Current Implementation:** ✅ Multi-import fully supported
 2. **Performance:** Memory limitations with large datasets (10MB file limit)
 3. **Data Formats:** Only supports semicolon-delimited CSV with SECONDS;PID;VALUE;UNITS columns
 4. **Export:** No chart export functionality
-5. **Layout:** Fixed sidebar ratio, no drag-to-resize
-6. **Graphs:** Uses subplots instead of individual scrollable graphs
+5. **Scroll Zoom:** ✅ Now capped to prevent zooming beyond data range
 
 ## Success Metrics
 
-1. **Performance:** Handle 100MB CSV files within 10 seconds
-2. **Usability:** Complete workflow within 3 clicks
-3. **Reliability:** 99.9% uptime for production deployment
-4. **Scalability:** Support 100+ simultaneous users
-5. **Data Quality:** 100% accurate data processing and visualization
+1. **Performance:** Handle 10MB CSV files smoothly with 29+ channels
+2. **Usability:** Load and visualize data within 3 clicks
+3. **Responsiveness:** Smooth panning/zooming with hardware acceleration
+4. **Data Quality:** 100% accurate data processing and visualization

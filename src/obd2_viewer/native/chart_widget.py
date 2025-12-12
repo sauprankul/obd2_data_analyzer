@@ -3,36 +3,38 @@
 High-performance chart widget using PyQtGraph.
 
 Provides hardware-accelerated plotting for OBD2 time-series data
-with support for multiple synchronized channels.
+with support for multiple synchronized channels and multi-import visualization.
 """
 
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea, QFrame
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QScrollArea
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QColor
-from typing import Dict, List, Optional, Any
-import pandas as pd
-import colorsys
+from typing import Dict, List, Optional, Any, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from .main_window import ImportData
 
 
-# Signal for synchronized hover across all plots
 class ChannelPlotWidget(pg.PlotWidget):
-    """Individual channel plot with optimized rendering."""
+    """Individual channel plot with support for multiple data lines (multi-import)."""
     
-    # Signal emitted when mouse hovers - sends x position
+    # Signal emitted when mouse clicks - sends x position
     hover_x_changed = pyqtSignal(float)
     # Signal emitted when x range changes via drag
     x_range_changed = pyqtSignal(float, float)
     
-    def __init__(self, channel_name: str, unit: str, color: str, parent=None):
+    def __init__(self, channel_name: str, unit: str, parent=None):
         super().__init__(parent)
         
         self.channel_name = channel_name
         self.unit = unit
-        self.color = color
-        self.data_line = None
-        self._current_hover_value = None
+        
+        # Multi-import support: list of data lines, one per import
+        self.data_lines: List[Optional[pg.PlotDataItem]] = []
+        self.import_colors: List[str] = []
+        self.import_data: List[Dict] = []  # [{x, y, offset, visible}, ...]
+        self._current_hover_values: List[Optional[float]] = []
         
         # Configure plot appearance
         self.setBackground('w')
@@ -47,6 +49,10 @@ class ChannelPlotWidget(pg.PlotWidget):
         self.setMouseEnabled(x=True, y=False)
         self.enableAutoRange(axis='y', enable=True)
         
+        # Store data bounds for zoom limiting
+        self._x_min_bound = None
+        self._x_max_bound = None
+        
         # Create crosshair - vertical line only
         self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen('#1976D2', width=1, style=Qt.PenStyle.DashLine))
         self.addItem(self.vLine, ignoreBounds=True)
@@ -57,28 +63,97 @@ class ChannelPlotWidget(pg.PlotWidget):
         # Connect range change signal
         self.sigXRangeChanged.connect(self._on_x_range_changed)
         
-        # Store data for hover lookup
-        self._x_data = None
-        self._y_data = None
-    
-    def set_data(self, x: np.ndarray, y: np.ndarray):
-        """Set the data for this plot."""
-        self._x_data = x
-        self._y_data = y
+    def set_import_count(self, count: int, colors: List[str]):
+        """Initialize data structures for the given number of imports."""
+        # Clear existing data lines
+        for line in self.data_lines:
+            if line is not None:
+                self.removeItem(line)
         
-        if self.data_line is None:
-            pen = pg.mkPen(color=self.color, width=2)
-            self.data_line = self.plot(x, y, pen=pen, name=self.channel_name)
+        self.data_lines = [None] * count
+        self.import_colors = colors
+        self.import_data = [{'x': None, 'y': None, 'offset': 0.0, 'visible': True} for _ in range(count)]
+        self._current_hover_values = [None] * count
+    
+    def set_import_data(self, import_index: int, x: np.ndarray, y: np.ndarray, offset: float = 0.0):
+        """Set data for a specific import."""
+        if import_index >= len(self.import_data):
+            return
+        
+        self.import_data[import_index] = {
+            'x': x,
+            'y': y,
+            'offset': offset,
+            'visible': self.import_data[import_index].get('visible', True)
+        }
+        
+        # Skip if no data
+        if x is None or len(x) == 0:
+            if self.data_lines[import_index] is not None:
+                self.data_lines[import_index].setData([], [])
+            return
+        
+        # Apply offset to x data for display
+        x_display = x + offset
+        
+        color = self.import_colors[import_index] if import_index < len(self.import_colors) else '#1976D2'
+        
+        if self.data_lines[import_index] is None:
+            pen = pg.mkPen(color=color, width=2)
+            self.data_lines[import_index] = self.plot(x_display, y, pen=pen)
         else:
-            self.data_line.setData(x, y)
+            self.data_lines[import_index].setData(x_display, y)
+        
+        # Set visibility
+        if self.data_lines[import_index]:
+            self.data_lines[import_index].setVisible(self.import_data[import_index]['visible'])
+    
+    def set_import_visible(self, import_index: int, visible: bool):
+        """Set visibility of a specific import's data line."""
+        if import_index < len(self.import_data):
+            self.import_data[import_index]['visible'] = visible
+            if import_index < len(self.data_lines) and self.data_lines[import_index]:
+                self.data_lines[import_index].setVisible(visible)
+    
+    def update_import_offset(self, import_index: int, offset: float):
+        """Update the time offset for a specific import and redraw."""
+        if import_index >= len(self.import_data):
+            return
+        
+        data = self.import_data[import_index]
+        data['offset'] = offset
+        
+        if data['x'] is not None and len(data['x']) > 0 and self.data_lines[import_index]:
+            x_display = data['x'] + offset
+            self.data_lines[import_index].setData(x_display, data['y'])
     
     def set_x_range(self, x_min: float, x_max: float):
         """Set the X axis range."""
         self.setXRange(x_min, x_max, padding=0)
     
+    def set_x_limits(self, x_min: float, x_max: float):
+        """Set the X axis limits to prevent zooming beyond data range."""
+        self._x_min_bound = x_min
+        self._x_max_bound = x_max
+        self.setLimits(xMin=x_min, xMax=x_max)
+    
     def _on_x_range_changed(self, view, range):
-        """Handle X range change from user drag."""
-        self.x_range_changed.emit(range[0], range[1])
+        """Handle X range change from user drag or scroll wheel."""
+        x_min, x_max = range[0], range[1]
+        
+        # Clamp to bounds if set
+        if self._x_min_bound is not None and self._x_max_bound is not None:
+            if x_min < self._x_min_bound:
+                x_min = self._x_min_bound
+            if x_max > self._x_max_bound:
+                x_max = self._x_max_bound
+            
+            if x_min != range[0] or x_max != range[1]:
+                self.blockSignals(True)
+                self.setXRange(x_min, x_max, padding=0)
+                self.blockSignals(False)
+        
+        self.x_range_changed.emit(x_min, x_max)
     
     def mouse_clicked(self, event):
         """Handle mouse click for crosshair positioning."""
@@ -89,31 +164,39 @@ class ChannelPlotWidget(pg.PlotWidget):
             
             self.vLine.setPos(x)
             self.update_hover_value(x)
-            
-            # Emit signal for synchronized crosshair
             self.hover_x_changed.emit(x)
     
     def update_hover_value(self, x: float):
         """Update the displayed hover value for given x position."""
-        if self._x_data is not None and len(self._x_data) > 0:
-            idx = np.searchsorted(self._x_data, x)
-            idx = np.clip(idx, 0, len(self._x_data) - 1)
-            
-            y_val = self._y_data[idx]
-            self._current_hover_value = y_val
-            
-            # Update title with current value
+        value_parts = []
+        
+        for i, data in enumerate(self.import_data):
+            if data['x'] is not None and len(data['x']) > 0 and data['visible']:
+                x_adjusted = x - data['offset']
+                idx = np.searchsorted(data['x'], x_adjusted)
+                idx = np.clip(idx, 0, len(data['x']) - 1)
+                
+                y_val = data['y'][idx]
+                self._current_hover_values[i] = y_val
+                
+                color = self.import_colors[i] if i < len(self.import_colors) else '#1976D2'
+                value_parts.append(f'<span style="color: {color}; font-weight: bold;">{y_val:.2f}</span>')
+            else:
+                if i < len(self._current_hover_values):
+                    self._current_hover_values[i] = None
+        
+        if value_parts:
+            values_str = ' | '.join(value_parts)
             self.setTitle(
                 f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> '
-                f'<span style="font-size: 10pt; color: #666;">({self.unit})</span> '
-                f'<span style="font-size: 11pt; font-weight: bold; color: #1976D2;">= {y_val:.2f}</span>'
+                f'<span style="font-size: 10pt; color: #666;">({self.unit})</span> = {values_str}'
             )
-            
-            self.vLine.setPos(x)
+        
+        self.vLine.setPos(x)
     
     def clear_hover_value(self):
         """Clear the hover value from title."""
-        self._current_hover_value = None
+        self._current_hover_values = [None] * len(self.import_data)
         self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> <span style="font-size: 10pt; color: #666;">({self.unit})</span>')
 
 
@@ -121,30 +204,31 @@ class OBD2ChartWidget(QWidget):
     """
     Main chart widget containing multiple synchronized channel plots.
     
-    Uses PyQtGraph for hardware-accelerated rendering capable of
-    handling millions of data points smoothly.
+    Uses PyQtGraph for hardware-accelerated rendering.
+    All data is handled through the multi-import architecture.
     """
     
-    # Signal emitted when time range changes
     time_range_changed = pyqtSignal(float, float)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        self.channels_data: Dict[str, pd.DataFrame] = {}
-        self.units: Dict[str, str] = {}
-        self.display_names: Dict[str, str] = {}
-        self.colors: Dict[str, str] = {}
-        self.plots: Dict[str, ChannelPlotWidget] = {}
-        self.visible_channels: set = set()
+        # Import storage
+        self.imports: List[Any] = []  # List of ImportData
+        self.import_colors: List[str] = []
         
-        # Time range
+        # Plots keyed by channel name
+        self.plots: Dict[str, ChannelPlotWidget] = {}
+        
+        # Visibility: {channel: {import_index: bool}}
+        self.channel_visibility: Dict[str, Dict[int, bool]] = {}
+        
+        # Time range (based on first/base import)
         self.min_time = 0.0
         self.max_time = 100.0
         self.current_start = 0.0
         self.current_end = 100.0
         
-        # Setup UI
         self._setup_ui()
     
     def _setup_ui(self):
@@ -163,7 +247,7 @@ class OBD2ChartWidget(QWidget):
         self.plots_container = QWidget()
         self.plots_layout = QVBoxLayout(self.plots_container)
         self.plots_layout.setContentsMargins(5, 5, 5, 5)
-        self.plots_layout.setSpacing(15)  # More space between charts
+        self.plots_layout.setSpacing(15)
         
         self.scroll_area.setWidget(self.plots_container)
         layout.addWidget(self.scroll_area)
@@ -171,65 +255,50 @@ class OBD2ChartWidget(QWidget):
         # Configure PyQtGraph global settings
         pg.setConfigOptions(antialias=True, useOpenGL=True)
     
-    def load_data(self, channels_data: Dict[str, pd.DataFrame], 
-                  units: Dict[str, str], 
-                  display_names: Dict[str, str]):
+    def load_data(self, imports: List[Any]):
         """
-        Load channel data into the chart widget.
+        Load data from imports.
         
         Args:
-            channels_data: Dictionary of DataFrames indexed by channel name
-            units: Dictionary mapping channels to their units
-            display_names: Dictionary mapping sanitized names to display names
+            imports: List of ImportData objects (can be 1 or more)
         """
-        self.channels_data = channels_data
-        self.units = units
-        self.display_names = display_names
+        self.imports = imports
+        self.import_colors = [imp.color for imp in imports]
         
-        # Use single color for all channels in this dataset
-        # A consistent color makes it clear all data is from the same source
-        self.dataset_color = '#1976D2'  # Material Blue 700 - professional, readable
-        self.colors = {ch: self.dataset_color for ch in channels_data.keys()}
+        # Get all unique channels across all imports
+        all_channels = set()
+        for imp in imports:
+            all_channels.update(imp.channels_data.keys())
         
-        # Calculate time range
-        self._calculate_time_range()
+        # Initialize visibility for all channels and imports
+        self.channel_visibility = {
+            ch: {i: True for i in range(len(imports))}
+            for ch in all_channels
+        }
         
-        # Set all channels visible by default
-        self.visible_channels = set(channels_data.keys())
+        # Time range from base (first) import
+        if imports:
+            base = imports[0]
+            all_times = []
+            for df in base.channels_data.values():
+                if 'SECONDS' in df.columns and len(df) > 0:
+                    all_times.extend([df['SECONDS'].min(), df['SECONDS'].max()])
+            if all_times:
+                self.min_time = min(all_times)
+                self.max_time = max(all_times)
+                self.current_start = self.min_time
+                self.current_end = self.max_time
         
-        # Create plots
-        self._create_plots()
+        # Create plots for all channels
+        self._create_plots(all_channels)
         
-        # Update all plots with data and set initial range
-        self._update_all_plots()
+        # Update all plots with data
+        self._update_plots()
         
-        # Force set the initial time range explicitly
+        # Set initial time range
         self.set_time_range(self.min_time, self.max_time)
     
-    def _generate_colors(self, channels: List[str]) -> Dict[str, str]:
-        """Generate distinct colors for each channel."""
-        colors = {}
-        for i, channel in enumerate(channels):
-            hue = (i * 0.618033988749895) % 1
-            rgb = colorsys.hsv_to_rgb(hue, 0.8, 0.8)
-            color = '#%02x%02x%02x' % tuple(int(c * 255) for c in rgb)
-            colors[channel] = color
-        return colors
-    
-    def _calculate_time_range(self):
-        """Calculate the overall time range from all channels."""
-        all_times = []
-        for df in self.channels_data.values():
-            if 'SECONDS' in df.columns:
-                all_times.extend(df['SECONDS'].values)
-        
-        if all_times:
-            self.min_time = min(all_times)
-            self.max_time = max(all_times)
-            self.current_start = self.min_time
-            self.current_end = self.max_time
-    
-    def _create_plots(self):
+    def _create_plots(self, channels: set):
         """Create plot widgets for all channels."""
         # Clear existing plots
         for plot in self.plots.values():
@@ -238,83 +307,107 @@ class OBD2ChartWidget(QWidget):
         self.plots.clear()
         
         # Create new plots
-        for channel in self.channels_data.keys():
-            display_name = self.display_names.get(channel, channel)
-            unit = self.units.get(channel, '')
-            color = self.colors.get(channel, '#1f77b4')
+        for channel in sorted(channels):
+            # Get display name and unit from first import that has this channel
+            display_name = channel
+            unit = ''
+            for imp in self.imports:
+                if channel in imp.channels_data:
+                    display_name = imp.display_names.get(channel, channel)
+                    unit = imp.units.get(channel, '')
+                    break
             
-            plot = ChannelPlotWidget(display_name, unit, color)
-            plot.setMinimumHeight(180)  # Taller for better title visibility
+            plot = ChannelPlotWidget(display_name, unit)
+            plot.setMinimumHeight(180)
             plot.setMaximumHeight(220)
             
-            # Disable auto-range on X axis - we control it manually
+            # Initialize for imports
+            plot.set_import_count(len(self.imports), self.import_colors)
+            
+            # Disable auto-range on X axis
             plot.enableAutoRange(axis='x', enable=False)
             
-            # Link X axis to other plots for synchronized panning
+            # Link X axis to other plots
             if self.plots:
                 first_plot = list(self.plots.values())[0]
                 plot.setXLink(first_plot)
             
-            # Connect hover signal for synchronized crosshair
+            # Connect signals
             plot.hover_x_changed.connect(self._on_hover_x_changed)
-            
-            # Connect x range change for drag updates
             plot.x_range_changed.connect(self._on_plot_x_range_changed)
             
             self.plots[channel] = plot
             self.plots_layout.addWidget(plot)
     
-    def _update_all_plots(self):
-        """Update all plots with current data and time range."""
+    def _update_plots(self):
+        """Update all plots with data from all imports."""
         for channel, plot in self.plots.items():
-            if channel in self.visible_channels and channel in self.channels_data:
-                df = self.channels_data[channel]
-                
-                # Filter by time range
-                mask = (df['SECONDS'] >= self.current_start) & (df['SECONDS'] <= self.current_end)
-                filtered_df = df[mask]
-                
-                if len(filtered_df) > 0:
-                    x = filtered_df['SECONDS'].values
-                    y = filtered_df['VALUE'].values
-                    plot.set_data(x, y)
-                    plot.set_x_range(self.current_start, self.current_end)
-                
+            has_any_data = False
+            
+            for i, imp in enumerate(self.imports):
+                if channel in imp.channels_data:
+                    df = imp.channels_data[channel]
+                    
+                    if len(df) > 0:
+                        x = df['SECONDS'].values
+                        y = df['VALUE'].values
+                        plot.set_import_data(i, x, y, imp.time_offset)
+                        has_any_data = True
+                else:
+                    # This import doesn't have this channel - set empty data
+                    plot.set_import_data(i, np.array([]), np.array([]), imp.time_offset)
+            
+            # Show/hide based on visibility settings
+            all_hidden = all(
+                not self.channel_visibility.get(channel, {}).get(i, True)
+                for i in range(len(self.imports))
+            )
+            
+            if has_any_data and not all_hidden:
+                plot.set_x_range(self.current_start, self.current_end)
+                plot.set_x_limits(self.min_time, self.max_time)
                 plot.show()
             else:
                 plot.hide()
     
-    def set_channel_visible(self, channel: str, visible: bool):
-        """Set visibility of a specific channel."""
-        if visible:
-            self.visible_channels.add(channel)
-        else:
-            self.visible_channels.discard(channel)
+    def set_channel_import_visible(self, channel: str, import_index: int, visible: bool):
+        """Set visibility of a specific channel for a specific import."""
+        if channel in self.channel_visibility:
+            self.channel_visibility[channel][import_index] = visible
         
         if channel in self.plots:
-            if visible:
-                self.plots[channel].show()
-                # Update data
-                if channel in self.channels_data:
-                    df = self.channels_data[channel]
-                    mask = (df['SECONDS'] >= self.current_start) & (df['SECONDS'] <= self.current_end)
-                    filtered_df = df[mask]
-                    if len(filtered_df) > 0:
-                        self.plots[channel].set_data(
-                            filtered_df['SECONDS'].values,
-                            filtered_df['VALUE'].values
-                        )
-            else:
+            self.plots[channel].set_import_visible(import_index, visible)
+            
+            # Check if ALL imports for this channel are hidden - if so, hide the plot widget
+            all_hidden = all(
+                not self.channel_visibility[channel].get(i, True)
+                for i in range(len(self.imports))
+            )
+            if all_hidden:
                 self.plots[channel].hide()
+            else:
+                self.plots[channel].show()
+    
+    def update_import_offset(self, import_index: int, offset: float):
+        """Update the time offset for a specific import."""
+        if import_index < len(self.imports):
+            self.imports[import_index].time_offset = offset
+            
+            for channel, plot in self.plots.items():
+                plot.update_import_offset(import_index, offset)
     
     def show_all_channels(self):
-        """Show all channels."""
-        self.visible_channels = set(self.channels_data.keys())
-        self._update_all_plots()
+        """Show all channels for all imports."""
+        for channel in self.plots:
+            for i in range(len(self.imports)):
+                self.set_channel_import_visible(channel, i, True)
+        self._update_plots()
     
     def hide_all_channels(self):
-        """Hide all channels."""
-        self.visible_channels.clear()
+        """Hide all channels for all imports."""
+        for channel in self.plots:
+            for i in range(len(self.imports)):
+                self.set_channel_import_visible(channel, i, False)
         for plot in self.plots.values():
             plot.hide()
     
@@ -322,7 +415,11 @@ class OBD2ChartWidget(QWidget):
         """Set the visible time range."""
         self.current_start = max(self.min_time, start)
         self.current_end = min(self.max_time, end)
-        self._update_all_plots()
+        
+        # Update X range on all plots
+        for plot in self.plots.values():
+            plot.set_x_range(self.current_start, self.current_end)
+        
         self.time_range_changed.emit(self.current_start, self.current_end)
     
     def shift_time(self, delta: float):
@@ -352,15 +449,11 @@ class OBD2ChartWidget(QWidget):
     
     def _on_hover_x_changed(self, x: float):
         """Handle hover x change - update all plots' crosshairs and values."""
-        for channel, plot in self.plots.items():
-            if channel in self.visible_channels:
-                plot.update_hover_value(x)
+        for plot in self.plots.values():
+            plot.update_hover_value(x)
     
     def _on_plot_x_range_changed(self, x_min: float, x_max: float):
         """Handle x range change from plot drag."""
-        # Update internal state
         self.current_start = max(self.min_time, x_min)
         self.current_end = min(self.max_time, x_max)
-        
-        # Emit signal to update time navigation inputs
         self.time_range_changed.emit(self.current_start, self.current_end)
