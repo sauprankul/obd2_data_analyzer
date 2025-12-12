@@ -20,10 +20,12 @@ from PyQt6.QtWidgets import (
     QFileDialog, QMessageBox, QScrollArea, QFrame, QLabel,
     QPushButton, QLineEdit, QCheckBox, QGroupBox, QDoubleSpinBox,
     QStatusBar, QMenuBar, QMenu, QToolBar, QApplication, QSizePolicy,
-    QDialog, QListWidget, QListWidgetItem, QStackedWidget, QGridLayout
+    QDialog, QListWidget, QListWidgetItem, QStackedWidget, QGridLayout,
+    QComboBox
 )
-from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer
+from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer, QStringListModel
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont, QColor
+from PyQt6.QtWidgets import QCompleter
 
 from .chart_widget import OBD2ChartWidget
 from ..core.data_loader import OBDDataLoader
@@ -31,25 +33,93 @@ from ..core.data_loader import OBDDataLoader
 logger = logging.getLogger(__name__)
 
 
+class SpinnerWidget(QWidget):
+    """Animated spinner widget."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(48, 48)
+        self.angle = 0
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._rotate)
+        self.timer.start(50)  # 20 FPS
+    
+    def _rotate(self):
+        self.angle = (self.angle + 30) % 360
+        self.update()
+    
+    def paintEvent(self, event):
+        from PyQt6.QtGui import QPainter, QPen, QColor
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+        
+        # Draw spinning arcs
+        pen = QPen(QColor('#1976D2'))
+        pen.setWidth(4)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        painter.setPen(pen)
+        
+        rect = self.rect().adjusted(6, 6, -6, -6)
+        
+        # Draw multiple arcs at different positions
+        for i in range(8):
+            opacity = 1.0 - (i * 0.1)
+            color = QColor('#1976D2')
+            color.setAlphaF(opacity)
+            pen.setColor(color)
+            painter.setPen(pen)
+            
+            start_angle = (self.angle - i * 45) * 16  # Qt uses 1/16th of a degree
+            span_angle = 30 * 16
+            painter.drawArc(rect, start_angle, span_angle)
+    
+    def stop(self):
+        self.timer.stop()
+
+
 class LoadingDialog(QDialog):
-    """Simple loading dialog with spinner text."""
+    """Loading dialog with animated spinner."""
     
     def __init__(self, message: str = "Loading...", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Loading")
         self.setModal(True)
-        self.setFixedSize(250, 80)
+        self.setFixedSize(320, 120)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint)
         
         layout = QVBoxLayout(self)
+        layout.setSpacing(15)
+        
+        # Spinner
+        spinner_layout = QHBoxLayout()
+        spinner_layout.addStretch()
+        self.spinner = SpinnerWidget()
+        spinner_layout.addWidget(self.spinner)
+        spinner_layout.addStretch()
+        layout.addLayout(spinner_layout)
+        
+        # Label with text scaling
         self.label = QLabel(message)
         self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.label.setStyleSheet("font-size: 12pt;")
+        self.label.setWordWrap(True)
+        self.label.setStyleSheet("font-size: 11pt;")
+        self.label.setMinimumHeight(30)
         layout.addWidget(self.label)
     
     def set_message(self, message: str):
+        # Scale font if text is too long
         self.label.setText(message)
+        font_size = 11
+        if len(message) > 40:
+            font_size = 10
+        if len(message) > 60:
+            font_size = 9
+        self.label.setStyleSheet(f"font-size: {font_size}pt;")
         QApplication.processEvents()
+    
+    def closeEvent(self, event):
+        self.spinner.stop()
+        super().closeEvent(event)
 
 
 # Import colors for multi-import visualization
@@ -101,21 +171,24 @@ class MultiImportChannelControl(QWidget):
     
     # Signal: (channel_name, import_index, visible)
     visibility_changed = pyqtSignal(str, int, bool)
+    # Signal: channel_name for edit button clicked (math channels only)
+    edit_requested = pyqtSignal(str)
     
     def __init__(self, channel_name: str, display_name: str, unit: str, 
-                 import_colors: List[str], parent=None):
+                 import_colors: List[str], is_math_channel: bool = False, parent=None):
         super().__init__(parent)
         
         self.channel_name = channel_name
         self.display_name = display_name
         self.unit = unit
+        self.is_math_channel = is_math_channel
         self.checkboxes: List[QCheckBox] = []
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
         
-        # Channel name label
-        name_label = QLabel(f"{display_name} ({unit})")
+        # Channel name label (no unit - unit shown in section header)
+        name_label = QLabel(display_name)
         name_label.setMinimumWidth(150)
         layout.addWidget(name_label)
         
@@ -133,6 +206,15 @@ class MultiImportChannelControl(QWidget):
             cb.stateChanged.connect(lambda state, idx=i: self._on_checkbox_changed(idx, state))
             self.checkboxes.append(cb)
             layout.addWidget(cb)
+        
+        # Edit button for math channels
+        if is_math_channel:
+            edit_btn = QPushButton("✏")
+            edit_btn.setFixedSize(24, 24)
+            edit_btn.setToolTip("Edit math channel")
+            edit_btn.setStyleSheet("background-color: #7B1FA2; color: white; font-size: 10pt;")
+            edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.channel_name))
+            layout.addWidget(edit_btn)
         
         layout.addStretch()
     
@@ -348,6 +430,184 @@ class SynchronizeDialog(QDialog):
     def _shift_offset(self, delta: float):
         new_val = self.offset_spin.value() + delta
         self.offset_spin.setValue(new_val)
+
+
+class MathChannelDialog(QDialog):
+    """Dialog for creating or editing a math channel from an expression."""
+    
+    # Signal: (name, expression, input_a, input_b, unit)
+    channel_created = pyqtSignal(str, str, str, str, str)
+    
+    def __init__(self, available_channels: List[str], available_units: List[str],
+                 channel_units: Dict[str, str] = None, edit_data: Optional[Dict] = None, parent=None):
+        super().__init__(parent)
+        
+        self.available_channels = sorted(available_channels)
+        self.channel_units = channel_units or {}
+        self.edit_mode = edit_data is not None
+        self.original_name = edit_data.get('name', '') if edit_data else ''
+        
+        self.setWindowTitle("Edit Math Channel" if self.edit_mode else "Create Math Channel")
+        self.setMinimumWidth(450)
+        
+        layout = QVBoxLayout(self)
+        
+        # Channel name
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Channel Name:"))
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("e.g., AFR_Calculated")
+        self.name_input.textChanged.connect(self._on_name_changed)
+        name_layout.addWidget(self.name_input)
+        layout.addLayout(name_layout)
+        
+        # Input A selection
+        input_a_layout = QHBoxLayout()
+        input_a_layout.addWidget(QLabel("Input A:"))
+        self.input_a_combo = QComboBox()
+        self.input_a_combo.addItems(self.available_channels)
+        self.input_a_unit_label = QLabel("")
+        self.input_a_unit_label.setStyleSheet("color: #666; font-style: italic;")
+        self.input_a_combo.currentTextChanged.connect(self._update_unit_labels)
+        input_a_layout.addWidget(self.input_a_combo)
+        input_a_layout.addWidget(self.input_a_unit_label)
+        layout.addLayout(input_a_layout)
+        
+        # Input B selection (optional)
+        input_b_layout = QHBoxLayout()
+        input_b_layout.addWidget(QLabel("Input B (optional):"))
+        self.input_b_combo = QComboBox()
+        self.input_b_combo.addItem("(None)")
+        self.input_b_combo.addItems(self.available_channels)
+        self.input_b_unit_label = QLabel("")
+        self.input_b_unit_label.setStyleSheet("color: #666; font-style: italic;")
+        self.input_b_combo.currentTextChanged.connect(self._update_unit_labels)
+        input_b_layout.addWidget(self.input_b_combo)
+        input_b_layout.addWidget(self.input_b_unit_label)
+        layout.addLayout(input_b_layout)
+        
+        # Expression
+        expr_layout = QVBoxLayout()
+        expr_label = QLabel("Expression (use A and B as variables):")
+        expr_layout.addWidget(expr_label)
+        self.expr_input = QLineEdit()
+        self.expr_input.setPlaceholderText("e.g., (A / 0.45) * 14.7")
+        self.expr_input.textChanged.connect(self._validate_expression)
+        expr_layout.addWidget(self.expr_input)
+        
+        # Validation status
+        self.validation_label = QLabel("")
+        self.validation_label.setStyleSheet("color: #666; font-size: 9pt;")
+        expr_layout.addWidget(self.validation_label)
+        
+        layout.addLayout(expr_layout)
+        
+        # Unit with autocomplete
+        unit_layout = QHBoxLayout()
+        unit_layout.addWidget(QLabel("Unit:"))
+        self.unit_input = QLineEdit()
+        self.unit_input.setPlaceholderText("e.g., AFR")
+        
+        # Setup autocomplete for units
+        self.unit_completer = QCompleter(sorted(set(available_units)))
+        self.unit_completer.setCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
+        self.unit_completer.setFilterMode(Qt.MatchFlag.MatchContains)
+        self.unit_input.setCompleter(self.unit_completer)
+        
+        unit_layout.addWidget(self.unit_input)
+        layout.addLayout(unit_layout)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_text = "Save" if self.edit_mode else "Create"
+        self.create_btn = QPushButton(btn_text)
+        self.create_btn.setStyleSheet("background-color: #1976D2; color: white; font-weight: bold;")
+        self.create_btn.setEnabled(False)
+        self.create_btn.clicked.connect(self._create_channel)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(self.create_btn)
+        layout.addLayout(btn_layout)
+        
+        # Pre-fill if editing
+        if edit_data:
+            self.name_input.setText(edit_data.get('name', ''))
+            self.expr_input.setText(edit_data.get('expression', ''))
+            self.unit_input.setText(edit_data.get('unit', ''))
+            
+            input_a = edit_data.get('input_a', '')
+            if input_a in self.available_channels:
+                self.input_a_combo.setCurrentText(input_a)
+            
+            input_b = edit_data.get('input_b', '')
+            if input_b and input_b in self.available_channels:
+                self.input_b_combo.setCurrentText(input_b)
+        
+        # Initialize unit labels
+        self._update_unit_labels()
+    
+    def _update_unit_labels(self):
+        """Update the unit labels for inputs A and B."""
+        input_a = self.input_a_combo.currentText()
+        if input_a and input_a in self.channel_units:
+            self.input_a_unit_label.setText(f"[{self.channel_units[input_a]}]")
+        else:
+            self.input_a_unit_label.setText("")
+        
+        input_b = self.input_b_combo.currentText()
+        if input_b and input_b != "(None)" and input_b in self.channel_units:
+            self.input_b_unit_label.setText(f"[{self.channel_units[input_b]}]")
+        else:
+            self.input_b_unit_label.setText("")
+    
+    def _on_name_changed(self):
+        """Re-validate when name changes."""
+        self._validate_expression()
+    
+    def _validate_expression(self):
+        """Validate the expression and update UI."""
+        expr = self.expr_input.text().strip()
+        name = self.name_input.text().strip()
+        
+        if not expr:
+            self.validation_label.setText("")
+            self.create_btn.setEnabled(False)
+            return
+        
+        # Try to evaluate with dummy values
+        try:
+            A = 1.0
+            B = 1.0
+            result = eval(expr, {"__builtins__": {}}, {"A": A, "B": B})
+            
+            if not isinstance(result, (int, float)):
+                raise ValueError("Expression must return a number")
+            
+            self.validation_label.setText(f"✓ Valid expression (test: A=1, B=1 → {result:.4f})")
+            self.validation_label.setStyleSheet("color: #388E3C; font-size: 9pt;")
+            self.create_btn.setEnabled(bool(name))
+            
+        except Exception as e:
+            self.validation_label.setText(f"✗ Invalid: {str(e)}")
+            self.validation_label.setStyleSheet("color: #D32F2F; font-size: 9pt;")
+            self.create_btn.setEnabled(False)
+    
+    def _create_channel(self):
+        """Emit signal to create the channel."""
+        name = self.name_input.text().strip()
+        expr = self.expr_input.text().strip()
+        input_a = self.input_a_combo.currentText()
+        input_b = self.input_b_combo.currentText()
+        if input_b == "(None)":
+            input_b = ""
+        unit = self.unit_input.text().strip() or "unit"
+        
+        self.channel_created.emit(name, expr, input_a, input_b, unit)
+        self.accept()
 
 
 class SidebarWindow(QMainWindow):
@@ -577,6 +837,9 @@ class OBD2MainWindow(QMainWindow):
         self.imports: List[ImportData] = []
         self.channel_controls: Dict[str, MultiImportChannelControl] = {}
         
+        # Math channel definitions: {name: {expression, input_a, input_b, unit}}
+        self.math_channels: Dict[str, Dict] = {}
+        
         # Legacy single-import references (for compatibility)
         self.channels_data: Dict = {}
         self.units: Dict = {}
@@ -665,6 +928,22 @@ class OBD2MainWindow(QMainWindow):
         channel_group = QGroupBox("Channel Controls")
         channel_layout = QVBoxLayout(channel_group)
         
+        # Graph height buttons
+        height_layout = QHBoxLayout()
+        self.btn_taller = QPushButton("📈 Taller")
+        self.btn_shorter = QPushButton("📉 Shorter")
+        btn_style_blue = "background-color: #0288D1; color: white; font-weight: bold;"
+        self.btn_taller.setStyleSheet(btn_style_blue)
+        self.btn_shorter.setStyleSheet(btn_style_blue)
+        self.btn_taller.clicked.connect(self._make_plots_taller)
+        self.btn_shorter.clicked.connect(self._make_plots_shorter)
+        height_layout.addWidget(self.btn_taller)
+        height_layout.addWidget(self.btn_shorter)
+        channel_layout.addLayout(height_layout)
+        
+        # Spacer
+        channel_layout.addSpacing(10)
+        
         # Show/Hide all buttons
         btn_layout = QHBoxLayout()
         self.btn_show_all = QPushButton("Show All")
@@ -675,6 +954,12 @@ class OBD2MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_show_all)
         btn_layout.addWidget(self.btn_hide_all)
         channel_layout.addLayout(btn_layout)
+        
+        # Create Math Channel button
+        self.btn_create_math = QPushButton("➕ Create Math Channel")
+        self.btn_create_math.setStyleSheet("background-color: #7B1FA2; color: white; font-weight: bold;")
+        self.btn_create_math.clicked.connect(self._show_math_channel_dialog)
+        channel_layout.addWidget(self.btn_create_math)
         
         # Channel list scroll area
         self.channel_scroll = QScrollArea()
@@ -854,6 +1139,14 @@ class OBD2MainWindow(QMainWindow):
         # Chart time range changes
         self.chart_widget.time_range_changed.connect(self._on_chart_time_changed)
     
+    def _make_plots_taller(self):
+        """Make all plots taller by 5%."""
+        self.chart_widget.make_plots_taller()
+    
+    def _make_plots_shorter(self):
+        """Make all plots shorter by 5%."""
+        self.chart_widget.make_plots_shorter()
+    
     def _open_file_dialog(self):
         """Open file dialog to select CSV file."""
         file_path, _ = QFileDialog.getOpenFileName(
@@ -940,11 +1233,13 @@ class OBD2MainWindow(QMainWindow):
             
             if is_additional:
                 self.imports.append(import_data)
+                # Preserve visibility when adding additional imports
+                self._process_imports(preserve_visibility=True)
             else:
                 # Clear existing imports and start fresh
                 self.imports = [import_data]
+                self._process_imports(preserve_visibility=False)
             
-            self._process_imports()
             self._add_to_recent(file_path)
             self._show_viz()
             
@@ -968,10 +1263,13 @@ class OBD2MainWindow(QMainWindow):
         if file_path:
             self._load_file(file_path, is_additional=True)
     
-    def _process_imports(self):
+    def _process_imports(self, preserve_visibility: bool = False):
         """Process all imports and update the UI."""
         if not self.imports:
             return
+        
+        # Compute math channels for any imports that don't have them yet
+        self._apply_math_channels_to_imports()
         
         # Update legend (includes per-import sync buttons)
         self.import_legend.update_legend(self.imports)
@@ -988,7 +1286,7 @@ class OBD2MainWindow(QMainWindow):
         self.chart_widget.load_data(self.imports)
         
         # Update channel controls for multi-import
-        self._update_channel_controls_multi()
+        self._update_channel_controls_multi(preserve_visibility=preserve_visibility)
         
         # Update time navigation inputs
         self._update_time_inputs()
@@ -1019,15 +1317,29 @@ class OBD2MainWindow(QMainWindow):
         
         logger.info(f"Processed {len(self.imports)} imports with {total_channels} channels")
     
-    def _update_channel_controls_multi(self):
-        """Update channel controls for multi-import mode."""
+    def _update_channel_controls_multi(self, preserve_visibility: bool = False, 
+                                        show_channels: Optional[set] = None):
+        """Update channel controls for multi-import mode.
+        
+        Args:
+            preserve_visibility: If True, restore visibility from existing controls
+            show_channels: Set of channel names that should be shown (overrides preserve_visibility for these)
+        """
+        show_channels = show_channels or set()
+        
+        # Save current visibility state if preserving
+        saved_visibility = {}
+        if preserve_visibility:
+            for channel, control in self.channel_controls.items():
+                saved_visibility[channel] = [cb.isChecked() for cb in control.checkboxes]
+        
         # Clear existing controls
         for control in self.channel_controls.values():
             self.channel_list_layout.removeWidget(control)
             control.deleteLater()
         self.channel_controls.clear()
         
-        # Remove all items from layout
+        # Remove all items from layout (including section headers)
         while self.channel_list_layout.count() > 0:
             item = self.channel_list_layout.takeAt(0)
             if item.widget():
@@ -1052,29 +1364,101 @@ class OBD2MainWindow(QMainWindow):
                     unit = imp.units.get(channel, '')
                     break
             
-            control = MultiImportChannelControl(channel, display_name, unit, import_colors)
+            is_math = channel in self.math_channels
+            control = MultiImportChannelControl(channel, display_name, unit, import_colors, is_math)
             control.visibility_changed.connect(self._on_channel_import_toggled)
+            control.edit_requested.connect(self._edit_math_channel)
             self.channel_controls[channel] = control
+            
+            # Determine visibility for this channel
+            if channel in show_channels:
+                # Explicitly show this channel (e.g., newly created math channel)
+                for i in range(len(import_colors)):
+                    control.set_import_visible(i, True)
+                    self.chart_widget.set_channel_import_visible(channel, i, True)
+            elif preserve_visibility and channel in saved_visibility:
+                saved = saved_visibility[channel]
+                for i in range(len(import_colors)):
+                    if i < len(saved):
+                        # Restore saved visibility
+                        visible = saved[i]
+                    else:
+                        # New import - default to same as first import's visibility
+                        visible = saved[0] if saved else True
+                    control.set_import_visible(i, visible)
+                    self.chart_widget.set_channel_import_visible(channel, i, visible)
+            elif preserve_visibility and channel not in saved_visibility:
+                # New channel while preserving - default to hidden
+                for i in range(len(import_colors)):
+                    control.set_import_visible(i, False)
+                    self.chart_widget.set_channel_import_visible(channel, i, False)
+            elif not preserve_visibility:
+                # Fresh load - default to hidden for math channels only
+                if is_math:
+                    for i in range(len(import_colors)):
+                        control.set_import_visible(i, False)
+                        self.chart_widget.set_channel_import_visible(channel, i, False)
         
         # Sort and add to layout
         self._sort_channel_controls()
     
     def _sort_channel_controls(self):
-        """Sort channel controls: selected at top, then by unit, then alphabetically."""
-        # Remove all widgets from layout (but don't delete them)
+        """Sort channel controls with section headers: Shown/Hidden, then by unit."""
+        # Remove all widgets from layout (but don't delete controls)
         while self.channel_list_layout.count() > 0:
             item = self.channel_list_layout.takeAt(0)
-            # Don't delete - we're just reordering
+            widget = item.widget()
+            # Only delete section headers (QLabel/QFrame), not controls
+            if widget and widget not in self.channel_controls.values():
+                widget.deleteLater()
         
-        # Sort controls
-        sorted_controls = sorted(
-            self.channel_controls.values(),
-            key=lambda c: c.sort_key(c.is_any_selected())
-        )
+        # Separate shown and hidden controls
+        shown_controls = []
+        hidden_controls = []
         
-        # Re-add in sorted order
-        for control in sorted_controls:
-            self.channel_list_layout.addWidget(control)
+        for control in self.channel_controls.values():
+            if control.is_any_selected():
+                shown_controls.append(control)
+            else:
+                hidden_controls.append(control)
+        
+        # Sort each group by unit, then by name
+        shown_controls.sort(key=lambda c: (c.unit.lower(), c.display_name.lower()))
+        hidden_controls.sort(key=lambda c: (c.unit.lower(), c.display_name.lower()))
+        
+        def add_section_header(text: str, color: str = "#1976D2"):
+            """Add a section header label."""
+            header = QLabel(f"<b>{text}</b>")
+            header.setStyleSheet(f"color: {color}; font-size: 11pt; padding: 5px 0px 2px 5px; background-color: #f0f0f0;")
+            self.channel_list_layout.addWidget(header)
+        
+        def add_unit_header(unit: str):
+            """Add a unit subheader."""
+            header = QLabel(f"  {unit}" if unit else "  (no unit)")
+            header.setStyleSheet("color: #666; font-size: 9pt; padding: 2px 0px 0px 10px; font-style: italic;")
+            self.channel_list_layout.addWidget(header)
+        
+        # Add Shown section
+        if shown_controls:
+            add_section_header(f"▼ Shown ({len(shown_controls)})", "#388E3C")
+            
+            current_unit = None
+            for control in shown_controls:
+                if control.unit != current_unit:
+                    current_unit = control.unit
+                    add_unit_header(current_unit)
+                self.channel_list_layout.addWidget(control)
+        
+        # Add Hidden section
+        if hidden_controls:
+            add_section_header(f"▼ Hidden ({len(hidden_controls)})", "#757575")
+            
+            current_unit = None
+            for control in hidden_controls:
+                if control.unit != current_unit:
+                    current_unit = control.unit
+                    add_unit_header(current_unit)
+                self.channel_list_layout.addWidget(control)
         
         # Add stretch at end
         self.channel_list_layout.addStretch()
@@ -1102,6 +1486,208 @@ class OBD2MainWindow(QMainWindow):
             self.chart_widget.update_import_offset(import_index, new_offset)
             # Update the offset display in the legend
             self.import_legend.update_offset(import_index, new_offset)
+    
+    def _show_math_channel_dialog(self, edit_channel: str = None):
+        """Show dialog to create or edit a math channel."""
+        if not self.imports:
+            QMessageBox.warning(self, "No Data", "Please load a CSV file first.")
+            return
+        
+        # Get all available channels from all imports (exclude math channels for input selection)
+        all_channels = set()
+        all_units = set()
+        channel_units = {}  # Map channel name to unit
+        for imp in self.imports:
+            for ch in imp.channels_data.keys():
+                if ch not in self.math_channels:  # Don't allow math channels as inputs
+                    all_channels.add(ch)
+                    if ch not in channel_units and ch in imp.units:
+                        channel_units[ch] = imp.units[ch]
+            all_units.update(imp.units.values())
+        
+        # Get edit data if editing
+        edit_data = None
+        if edit_channel and edit_channel in self.math_channels:
+            edit_data = {'name': edit_channel, **self.math_channels[edit_channel]}
+        
+        dialog = MathChannelDialog(list(all_channels), list(all_units), channel_units, edit_data, self)
+        dialog.channel_created.connect(lambda n, e, a, b, u: self._create_math_channel(n, e, a, b, u, edit_channel))
+        dialog.exec()
+    
+    def _edit_math_channel(self, channel_name: str):
+        """Open edit dialog for a math channel."""
+        self._show_math_channel_dialog(edit_channel=channel_name)
+    
+    def _apply_math_channels_to_imports(self):
+        """Apply all defined math channels to imports that don't have them yet."""
+        import numpy as np
+        import pandas as pd
+        
+        if not self.math_channels:
+            return
+        
+        for name, definition in self.math_channels.items():
+            expression = definition['expression']
+            input_a = definition['input_a']
+            input_b = definition['input_b']
+            unit = definition['unit']
+            
+            for imp in self.imports:
+                # Skip if this import already has this math channel
+                if name in imp.channels_data:
+                    continue
+                
+                # Skip if input A is not available
+                if input_a not in imp.channels_data:
+                    logger.debug(f"Skipping math channel '{name}' for {imp.filename}: input A '{input_a}' not found")
+                    continue
+                
+                df_a = imp.channels_data[input_a]
+                times = df_a['SECONDS'].values
+                values_a = df_a['VALUE'].values
+                
+                if input_b and input_b in imp.channels_data:
+                    # Align B values to A's time points
+                    df_b = imp.channels_data[input_b]
+                    times_b = df_b['SECONDS'].values
+                    values_b_raw = df_b['VALUE'].values
+                    
+                    values_b = np.zeros_like(values_a)
+                    for i, t in enumerate(times):
+                        idx = np.searchsorted(times_b, t)
+                        if idx == 0:
+                            values_b[i] = values_b_raw[0]
+                        elif idx >= len(times_b):
+                            values_b[i] = values_b_raw[-1]
+                        else:
+                            diff_before = t - times_b[idx - 1]
+                            diff_after = times_b[idx] - t
+                            if diff_after <= diff_before:
+                                values_b[i] = values_b_raw[idx]
+                            else:
+                                values_b[i] = values_b_raw[idx - 1]
+                else:
+                    values_b = np.zeros_like(values_a)
+                
+                try:
+                    result_values = np.zeros_like(values_a)
+                    for i in range(len(values_a)):
+                        A = values_a[i]
+                        B = values_b[i]
+                        result_values[i] = eval(expression, {"__builtins__": {}}, {"A": A, "B": B})
+                    
+                    new_df = pd.DataFrame({
+                        'SECONDS': times,
+                        'VALUE': result_values
+                    })
+                    
+                    imp.channels_data[name] = new_df
+                    imp.units[name] = unit
+                    imp.display_names[name] = name.replace('_', ' ').title()
+                    
+                    logger.info(f"Applied math channel '{name}' to {imp.filename}")
+                    
+                except Exception as e:
+                    logger.error(f"Error applying math channel '{name}' to {imp.filename}: {e}")
+    
+    def _create_math_channel(self, name: str, expression: str, input_a: str, input_b: str, unit: str, 
+                             replacing: str = None):
+        """Create a math channel from the given expression."""
+        import numpy as np
+        import pandas as pd
+        
+        logger.info(f"Creating math channel: {name} = {expression} (A={input_a}, B={input_b})")
+        
+        # If replacing an existing channel, remove it first
+        if replacing and replacing != name:
+            for imp in self.imports:
+                if replacing in imp.channels_data:
+                    del imp.channels_data[replacing]
+                    if replacing in imp.units:
+                        del imp.units[replacing]
+                    if replacing in imp.display_names:
+                        del imp.display_names[replacing]
+            if replacing in self.math_channels:
+                del self.math_channels[replacing]
+        
+        # Store the math channel definition
+        self.math_channels[name] = {
+            'expression': expression,
+            'input_a': input_a,
+            'input_b': input_b,
+            'unit': unit
+        }
+        
+        # Process for each import
+        for imp in self.imports:
+            if input_a not in imp.channels_data:
+                logger.warning(f"Input A '{input_a}' not found in {imp.filename}")
+                continue
+            
+            df_a = imp.channels_data[input_a]
+            times = df_a['SECONDS'].values
+            values_a = df_a['VALUE'].values
+            
+            if input_b and input_b in imp.channels_data:
+                # Align B values to A's time points (nearest neighbor, prefer later)
+                df_b = imp.channels_data[input_b]
+                times_b = df_b['SECONDS'].values
+                values_b_raw = df_b['VALUE'].values
+                
+                # For each time in A, find nearest B value
+                values_b = np.zeros_like(values_a)
+                for i, t in enumerate(times):
+                    # Find index where t would be inserted
+                    idx = np.searchsorted(times_b, t)
+                    
+                    if idx == 0:
+                        values_b[i] = values_b_raw[0]
+                    elif idx >= len(times_b):
+                        values_b[i] = values_b_raw[-1]
+                    else:
+                        # Check which is closer, prefer later (idx) if tied
+                        diff_before = t - times_b[idx - 1]
+                        diff_after = times_b[idx] - t
+                        if diff_after <= diff_before:
+                            values_b[i] = values_b_raw[idx]
+                        else:
+                            values_b[i] = values_b_raw[idx - 1]
+            else:
+                values_b = np.zeros_like(values_a)
+            
+            # Evaluate expression for each point
+            try:
+                result_values = np.zeros_like(values_a)
+                for i in range(len(values_a)):
+                    A = values_a[i]
+                    B = values_b[i]
+                    result_values[i] = eval(expression, {"__builtins__": {}}, {"A": A, "B": B})
+                
+                # Create DataFrame for the new channel
+                new_df = pd.DataFrame({
+                    'SECONDS': times,
+                    'VALUE': result_values
+                })
+                
+                # Add to import's channels_data
+                imp.channels_data[name] = new_df
+                imp.units[name] = unit
+                imp.display_names[name] = name.replace('_', ' ').title()
+                
+                logger.info(f"Created math channel '{name}' for {imp.filename} with {len(new_df)} points")
+                
+            except Exception as e:
+                logger.error(f"Error evaluating expression for {imp.filename}: {e}")
+                QMessageBox.warning(self, "Error", f"Failed to create math channel for {imp.filename}:\n{e}")
+                return
+        
+        # Add channel to chart widget
+        display_name = name.replace('_', ' ').title()
+        self.chart_widget.add_channel(name, display_name, unit)
+        
+        # Refresh the UI - preserve visibility, but show the new math channel
+        self._update_channel_controls_multi(preserve_visibility=True, show_channels={name})
+        self.statusbar.showMessage(f"{'Updated' if replacing else 'Created'} math channel: {name}", 5000)
     
     def _load_folder(self, folder_path: str):
         """Load CSV files from a folder."""

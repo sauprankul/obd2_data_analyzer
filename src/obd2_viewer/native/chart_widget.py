@@ -245,6 +245,11 @@ class OBD2ChartWidget(QWidget):
         # Flag to prevent feedback during programmatic range changes
         self._updating_range = False
         
+        # Plot height settings
+        self._base_plot_height = 200  # Base height in pixels
+        self._plot_height_min = 200
+        self._plot_height_max = 220
+        
         self._setup_ui()
     
     def _setup_ui(self):
@@ -334,8 +339,8 @@ class OBD2ChartWidget(QWidget):
                     break
             
             plot = ChannelPlotWidget(display_name, unit)
-            plot.setMinimumHeight(180)
-            plot.setMaximumHeight(220)
+            plot.setMinimumHeight(self._plot_height_min)
+            plot.setMaximumHeight(self._plot_height_max)
             
             # Initialize for imports
             plot.set_import_count(len(self.imports), self.import_colors)
@@ -386,6 +391,62 @@ class OBD2ChartWidget(QWidget):
                 plot.show()
             else:
                 plot.hide()
+    
+    def add_channel(self, channel: str, display_name: str, unit: str):
+        """Add a new channel (e.g., math channel) to the chart."""
+        if channel in self.plots:
+            # Channel already exists - just update data
+            self._update_single_plot(channel)
+            return
+        
+        # Initialize visibility
+        self.channel_visibility[channel] = {i: False for i in range(len(self.imports))}
+        
+        # Create plot
+        plot = ChannelPlotWidget(display_name, unit)
+        plot.setMinimumHeight(self._plot_height_min)
+        plot.setMaximumHeight(self._plot_height_max)
+        plot.set_import_count(len(self.imports), self.import_colors)
+        plot.enableAutoRange(axis='x', enable=False)
+        
+        # Link X axis to other plots
+        if self.plots:
+            first_plot = list(self.plots.values())[0]
+            plot.setXLink(first_plot)
+        
+        # Connect signals
+        plot.hover_x_changed.connect(self._on_hover_x_changed)
+        plot.x_range_changed.connect(self._on_plot_x_range_changed)
+        plot.click_to_center.connect(self._on_click_to_center)
+        
+        self.plots[channel] = plot
+        self.plots_layout.addWidget(plot)
+        
+        # Update data for this plot
+        self._update_single_plot(channel)
+        
+        # Set time range
+        plot.set_x_range(self.current_start, self.current_end)
+        plot.set_x_limits(self.min_time, self.max_time)
+        
+        # Start hidden
+        plot.hide()
+    
+    def _update_single_plot(self, channel: str):
+        """Update data for a single plot."""
+        if channel not in self.plots:
+            return
+        
+        plot = self.plots[channel]
+        for i, imp in enumerate(self.imports):
+            if channel in imp.channels_data:
+                df = imp.channels_data[channel]
+                if len(df) > 0:
+                    x = df['SECONDS'].values
+                    y = df['VALUE'].values
+                    plot.set_import_data(i, x, y, imp.time_offset)
+            else:
+                plot.set_import_data(i, np.array([]), np.array([]), imp.time_offset)
     
     def set_channel_import_visible(self, channel: str, import_index: int, visible: bool):
         """Set visibility of a specific channel for a specific import."""
@@ -499,3 +560,25 @@ class OBD2ChartWidget(QWidget):
             new_start = new_end - duration
         
         self.set_time_range(new_start, new_end)
+    
+    def make_plots_taller(self):
+        """Increase plot heights by 5%."""
+        self._base_plot_height = int(self._base_plot_height * 1.05)
+        self._update_plot_heights()
+    
+    def make_plots_shorter(self):
+        """Decrease plot heights by 5%."""
+        new_height = int(self._base_plot_height * 0.95)
+        # Minimum height of 80px
+        if new_height >= 80:
+            self._base_plot_height = new_height
+            self._update_plot_heights()
+    
+    def _update_plot_heights(self):
+        """Apply current height settings to all plots."""
+        self._plot_height_min = self._base_plot_height
+        self._plot_height_max = int(self._base_plot_height * 1.1)  # 10% range
+        
+        for plot in self.plots.values():
+            plot.setMinimumHeight(self._plot_height_min)
+            plot.setMaximumHeight(self._plot_height_max)
