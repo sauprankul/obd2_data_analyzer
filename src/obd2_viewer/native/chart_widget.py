@@ -23,6 +23,8 @@ class ChannelPlotWidget(pg.PlotWidget):
     hover_x_changed = pyqtSignal(float)
     # Signal emitted when x range changes via drag
     x_range_changed = pyqtSignal(float, float)
+    # Signal emitted when user clicks to center on a position
+    click_to_center = pyqtSignal(float)
     
     def __init__(self, channel_name: str, unit: str, parent=None):
         super().__init__(parent)
@@ -62,6 +64,14 @@ class ChannelPlotWidget(pg.PlotWidget):
         
         # Connect range change signal
         self.sigXRangeChanged.connect(self._on_x_range_changed)
+        
+        # Disable scroll wheel zoom - scroll should scroll the container, not zoom
+        self.setMouseEnabled(x=True, y=False)
+        self.getViewBox().setMouseEnabled(x=True, y=False)
+        
+    def wheelEvent(self, event):
+        """Override wheel event to prevent zoom - let parent scroll area handle it."""
+        event.ignore()  # Pass to parent (scroll area)
         
     def set_import_count(self, count: int, colors: List[str]):
         """Initialize data structures for the given number of imports."""
@@ -156,7 +166,7 @@ class ChannelPlotWidget(pg.PlotWidget):
         self.x_range_changed.emit(x_min, x_max)
     
     def mouse_clicked(self, event):
-        """Handle mouse click for crosshair positioning."""
+        """Handle mouse click for crosshair positioning and centering view."""
         pos = event.scenePos()
         if self.sceneBoundingRect().contains(pos):
             mouse_point = self.plotItem.vb.mapSceneToView(pos)
@@ -165,6 +175,9 @@ class ChannelPlotWidget(pg.PlotWidget):
             self.vLine.setPos(x)
             self.update_hover_value(x)
             self.hover_x_changed.emit(x)
+            
+            # Emit signal to center view on clicked position
+            self.click_to_center.emit(x)
     
     def update_hover_value(self, x: float):
         """Update the displayed hover value for given x position."""
@@ -228,6 +241,9 @@ class OBD2ChartWidget(QWidget):
         self.max_time = 100.0
         self.current_start = 0.0
         self.current_end = 100.0
+        
+        # Flag to prevent feedback during programmatic range changes
+        self._updating_range = False
         
         self._setup_ui()
     
@@ -335,6 +351,7 @@ class OBD2ChartWidget(QWidget):
             # Connect signals
             plot.hover_x_changed.connect(self._on_hover_x_changed)
             plot.x_range_changed.connect(self._on_plot_x_range_changed)
+            plot.click_to_center.connect(self._on_click_to_center)
             
             self.plots[channel] = plot
             self.plots_layout.addWidget(plot)
@@ -413,6 +430,8 @@ class OBD2ChartWidget(QWidget):
     
     def set_time_range(self, start: float, end: float):
         """Set the visible time range."""
+        self._updating_range = True
+        
         self.current_start = max(self.min_time, start)
         self.current_end = min(self.max_time, end)
         
@@ -420,6 +439,7 @@ class OBD2ChartWidget(QWidget):
         for plot in self.plots.values():
             plot.set_x_range(self.current_start, self.current_end)
         
+        self._updating_range = False
         self.time_range_changed.emit(self.current_start, self.current_end)
     
     def shift_time(self, delta: float):
@@ -454,6 +474,28 @@ class OBD2ChartWidget(QWidget):
     
     def _on_plot_x_range_changed(self, x_min: float, x_max: float):
         """Handle x range change from plot drag."""
+        # Ignore if we're programmatically updating the range
+        if self._updating_range:
+            return
+        
         self.current_start = max(self.min_time, x_min)
         self.current_end = min(self.max_time, x_max)
         self.time_range_changed.emit(self.current_start, self.current_end)
+    
+    def _on_click_to_center(self, x: float):
+        """Handle click to center - shift view so clicked position is at center."""
+        duration = self.current_end - self.current_start
+        half_duration = duration / 2
+        
+        new_start = x - half_duration
+        new_end = x + half_duration
+        
+        # Clamp to data bounds
+        if new_start < self.min_time:
+            new_start = self.min_time
+            new_end = new_start + duration
+        if new_end > self.max_time:
+            new_end = self.max_time
+            new_start = new_end - duration
+        
+        self.set_time_range(new_start, new_end)

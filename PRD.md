@@ -59,11 +59,11 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Handles 29+ channels from real OBD2 data
 - ✅ Creates pandas DataFrames with SECONDS and VALUE columns
 
-**Questions for Implementation:**
+**Design Decisions:**
 
-1. How should we handle channels with different sampling rates?
-2. Should we interpolate to align timestamps or keep original sampling?
-3. How to detect channel boundaries in malformed CSVs?
+1. **Different sampling rates:** Plot raw data as line graphs - no resampling needed
+2. **Timestamp alignment:** Keep original sampling, no interpolation
+3. **Malformed CSVs:** Fail with clear error message if CSV structure is invalid
 
 ### 2. Visualization & Plotting
 
@@ -92,7 +92,7 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Channel titles display value at crosshair position
 - ✅ Scrollable plot container
 - ✅ 15px spacing between charts for readability
-- ✅ Scroll wheel zoom capped to data range
+- ✅ Scroll wheel scrolls graph area (not zoom)
 - ✅ Split window mode for dual monitor setups
 
 #### 2.2 Time Navigation Controls
@@ -166,17 +166,15 @@ A professional **native Windows application** for importing, processing, and vis
 - Import legend with: filename, color, duration (h:m:s), time offset, per-import Synchronize button
 - Split window mode (detach sidebar to separate window)
 
-**Implementation Status:** ⚠️ Partially Implemented
+**Implementation Status:** ✅ Fully Implemented
 **Current Working Components:**
 
 - ✅ Channel visibility controls with per-import checkboxes
-- ✅ Time navigation with full granularity
+- ✅ Time navigation with compact single-row layout, red Reset button in center
 - ✅ Add Import button
-- ✅ Import legend showing filename-color mapping
+- ✅ Import legend showing filename, color, duration (h:m:s), offset, per-import Sync button
 - ✅ Split window mode via View menu
-- ❌ Compact single-row time nav layout (pending)
-- ❌ Per-import Synchronize buttons with offset display (pending)
-- ❌ Duration display per import (pending)
+- ✅ Per-import Synchronize dialog for time offset adjustment
 
 #### 3.3 Modal Interfaces
 
@@ -193,33 +191,35 @@ A professional **native Windows application** for importing, processing, and vis
 
 ### 4. Mathematical Channel Creation
 
-#### 4.1 Basic Math Operations
+#### 4.1 Math Channel Expressions
 
 **Requirements:**
 
-- Input A (numerical channel selection)
-- Input B (numerical channel with same units)
-- Basic arithmetic operations (+, -, *, /)
+- Input A (required numerical channel selection)
+- Input B (optional numerical channel, only channels with same unit as A shown)
+- Expression field supporting Python-style math: `(A/0.45) * 14.7` or `A + B` or `A * B / 2`
+- Variables `A` and `B` represent channel values at each time point
+- Expression validation: must evaluate to a number given numeric A and B
+- Cannot save invalid expressions (Create/Update buttons disabled)
 - Apply to all existing imports
 - New graph placement below input A's graph
+- Math channels can be edited after creation
+
+**Time Alignment for A and B:**
+
+- Use Input A's time points as the x-axis
+- For each A time point, find nearest B value by x position
+- If tied (equidistant), pick the later B value
 
 **Implementation Status:** ❌ Not Implemented
-**Known Issues:** No math channel functionality
-
-**Questions for Implementation:**
-
-1. Should we support more complex expressions (A*B, A/B, etc.)?
-2. How should we handle unit validation?
-3. Should math channels be editable after creation?
 
 #### 4.2 Advanced Math Operations (Future)
 
 **Requirements:**
 
-- Boolean operations
-- Conditional expressions
-- Statistical functions
-- Custom formulas
+- Boolean operations and conditionals
+- Statistical functions (min, max, avg, rolling average)
+- Multi-channel expressions (C, D, E... inputs)
 
 **Implementation Status:** ❌ Not Planned Yet
 
@@ -339,7 +339,7 @@ A professional **native Windows application** for importing, processing, and vis
 
 - ✅ Robust CSV parsing
 - ✅ Semicolon delimiter support
-- ❌ Loading spinner during parsing (pending)
+- ✅ Loading dialog during file parsing
 
 #### 7.2 Data Validation
 

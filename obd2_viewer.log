@@ -420,3 +420,104 @@
 2025-12-11 21:26:11,458 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
 2025-12-11 21:26:12,177 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
 2025-12-11 21:26:16,787 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 37 channels
+2025-12-11 22:07:27,359 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:07:27,360 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:07:30,037 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:07:30,287 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:07:30,965 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:08:02,475 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:08:02,496 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:08:02,634 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:08:03,679 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:08:16,149 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 11-16-16.csv (4.5MB)
+2025-12-11 22:08:16,231 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 22:08:16,864 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 22:08:21,376 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 37 channels
+2025-12-11 22:14:43,199 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:14:43,200 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:14:45,835 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:14:46,072 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:14:46,761 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:14:59,695 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:14:59,716 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:14:59,851 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:15:00,908 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:15:18,018 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: 2025-11-20 11-16-16.csv (4.5MB)
+2025-12-11 22:15:18,102 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 37 channels
+2025-12-11 22:15:18,701 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 37 channels
+2025-12-11 22:15:23,002 - obd2_viewer.native.main_window - INFO - Processed 2 imports with 37 channels
+2025-12-11 22:21:06,905 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:21:06,905 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:21:09,540 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:21:09,777 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:21:10,465 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:21:12,451 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:21:12,471 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:21:12,607 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:21:13,657 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:21:56,467 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:21:56,468 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:21:59,284 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:21:59,535 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:22:00,275 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:22:02,636 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:22:02,656 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:22:02,798 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:22:03,874 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:24:08,064 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:24:08,065 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:24:10,731 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:24:10,969 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:24:11,646 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:24:13,267 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:24:13,289 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:24:13,431 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:24:14,524 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:24:23,852 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=0.1
+2025-12-11 22:24:23,853 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=368.22283071269436
+2025-12-11 22:24:24,135 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:24:31,639 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:24:31,640 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=362.7992218454122
+2025-12-11 22:24:31,933 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:24:32,885 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:24:32,886 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=384.9850000000006
+2025-12-11 22:24:32,887 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:24:39,686 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=-5
+2025-12-11 22:24:39,686 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=352.19048289691676
+2025-12-11 22:24:40,004 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:24:40,965 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=-5
+2025-12-11 22:24:40,965 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=384.9850000000006
+2025-12-11 22:24:40,975 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:24:40,976 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=-5
+2025-12-11 22:24:40,976 - obd2_viewer.native.main_window - INFO - Before: start=0.0, end=384.9850000000006
+2025-12-11 22:24:40,978 - obd2_viewer.native.main_window - INFO - After: start=0.0, end=384.9850000000006
+2025-12-11 22:25:42,276 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 22:25:42,277 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 22:25:44,945 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 22:25:45,185 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 22:25:45,866 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 22:25:47,817 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 22:25:47,839 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 22:25:47,978 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 22:25:49,046 - obd2_viewer.native.main_window - INFO - Processed 1 imports with 29 channels
+2025-12-11 22:25:57,858 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:25:57,859 - obd2_viewer.native.main_window - INFO - Before: start=36.573575000000034, end=348.4114250000006
+2025-12-11 22:25:58,113 - obd2_viewer.native.main_window - INFO - After: start=37.573575000000034, end=349.4114250000006
+2025-12-11 22:25:59,065 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:25:59,066 - obd2_viewer.native.main_window - INFO - Before: start=37.573575000000034, end=349.4114250000006
+2025-12-11 22:25:59,319 - obd2_viewer.native.main_window - INFO - After: start=38.573575000000034, end=350.4114250000006
+2025-12-11 22:26:00,269 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:26:00,269 - obd2_viewer.native.main_window - INFO - Before: start=38.573575000000034, end=350.4114250000006
+2025-12-11 22:26:00,526 - obd2_viewer.native.main_window - INFO - After: start=39.573575000000034, end=351.4114250000006
+2025-12-11 22:26:01,479 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=1
+2025-12-11 22:26:01,479 - obd2_viewer.native.main_window - INFO - Before: start=39.573575000000034, end=351.4114250000006
+2025-12-11 22:26:01,744 - obd2_viewer.native.main_window - INFO - After: start=40.573575000000034, end=352.4114250000006
+2025-12-11 22:26:02,696 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=15
+2025-12-11 22:26:02,696 - obd2_viewer.native.main_window - INFO - Before: start=40.573575000000034, end=352.4114250000006
+2025-12-11 22:26:02,951 - obd2_viewer.native.main_window - INFO - After: start=55.573575000000034, end=367.4114250000006
+2025-12-11 22:26:03,995 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=15
+2025-12-11 22:26:03,996 - obd2_viewer.native.main_window - INFO - Before: start=55.573575000000034, end=367.4114250000006
+2025-12-11 22:26:04,255 - obd2_viewer.native.main_window - INFO - After: start=70.57357500000003, end=382.4114250000006
+2025-12-11 22:26:05,205 - obd2_viewer.native.main_window - INFO - _shift_time called with delta=15
+2025-12-11 22:26:05,205 - obd2_viewer.native.main_window - INFO - Before: start=70.57357500000003, end=382.4114250000006
+2025-12-11 22:26:05,534 - obd2_viewer.native.main_window - INFO - After: start=73.14715000000001, end=384.9850000000006

@@ -22,13 +22,35 @@ from PyQt6.QtWidgets import (
     QStatusBar, QMenuBar, QMenu, QToolBar, QApplication, QSizePolicy,
     QDialog, QListWidget, QListWidgetItem, QStackedWidget, QGridLayout
 )
-from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal
+from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer
 from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont, QColor
 
 from .chart_widget import OBD2ChartWidget
 from ..core.data_loader import OBDDataLoader
 
 logger = logging.getLogger(__name__)
+
+
+class LoadingDialog(QDialog):
+    """Simple loading dialog with spinner text."""
+    
+    def __init__(self, message: str = "Loading...", parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Loading")
+        self.setModal(True)
+        self.setFixedSize(250, 80)
+        self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint)
+        
+        layout = QVBoxLayout(self)
+        self.label = QLabel(message)
+        self.label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.label.setStyleSheet("font-size: 12pt;")
+        layout.addWidget(self.label)
+    
+    def set_message(self, message: str):
+        self.label.setText(message)
+        QApplication.processEvents()
+
 
 # Import colors for multi-import visualization
 IMPORT_COLORS = [
@@ -160,140 +182,172 @@ class ChannelControlWidget(QWidget):
 
 
 class ImportLegendWidget(QWidget):
-    """Widget showing the legend mapping filenames to colors."""
+    """Widget showing the legend mapping filenames to colors with duration, offset, and sync buttons."""
+    
+    # Signal: import_index for sync button clicked
+    sync_requested = pyqtSignal(int)
     
     def __init__(self, parent=None):
         super().__init__(parent)
         
-        self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(5, 5, 5, 5)
-        self.layout.setSpacing(2)
+        self.main_layout = QVBoxLayout(self)
+        self.main_layout.setContentsMargins(5, 5, 5, 5)
+        self.main_layout.setSpacing(4)
+        self.offset_labels: List[QLabel] = []
+    
+    def _format_duration(self, seconds: float) -> str:
+        """Format duration as h:m:s."""
+        hours = int(seconds // 3600)
+        minutes = int((seconds % 3600) // 60)
+        secs = int(seconds % 60)
+        if hours > 0:
+            return f"{hours}h {minutes}m {secs}s"
+        elif minutes > 0:
+            return f"{minutes}m {secs}s"
+        else:
+            return f"{secs}s"
     
     def update_legend(self, imports: List[ImportData]):
         # Clear existing
-        while self.layout.count() > 0:
-            item = self.layout.takeAt(0)
+        while self.main_layout.count() > 0:
+            item = self.main_layout.takeAt(0)
             if item.widget():
                 item.widget().deleteLater()
         
+        self.offset_labels = []
+        
         # Add legend entries
-        for imp in imports:
+        for i, imp in enumerate(imports):
             entry = QWidget()
-            entry_layout = QHBoxLayout(entry)
-            entry_layout.setContentsMargins(0, 0, 0, 0)
+            entry_layout = QVBoxLayout(entry)
+            entry_layout.setContentsMargins(2, 2, 2, 2)
+            entry_layout.setSpacing(2)
+            
+            # Row 1: Color + Filename
+            row1 = QHBoxLayout()
+            row1.setSpacing(4)
             
             # Color indicator
             color_label = QLabel()
-            color_label.setFixedSize(16, 16)
-            color_label.setStyleSheet(f"background-color: {imp.color}; border-radius: 8px;")
-            entry_layout.addWidget(color_label)
+            color_label.setFixedSize(14, 14)
+            color_label.setStyleSheet(f"background-color: {imp.color}; border-radius: 7px;")
+            row1.addWidget(color_label)
             
             # Filename
-            name_label = QLabel(imp.filename)
+            name_label = QLabel(f"<b>{imp.filename}</b>")
             name_label.setToolTip(imp.file_path)
-            entry_layout.addWidget(name_label, 1)
+            row1.addWidget(name_label, 1)
             
-            self.layout.addWidget(entry)
+            entry_layout.addLayout(row1)
+            
+            # Row 2: Duration + Offset + Sync button
+            row2 = QHBoxLayout()
+            row2.setSpacing(4)
+            
+            # Duration
+            duration = imp.max_time - imp.min_time if hasattr(imp, 'max_time') else 0
+            duration_label = QLabel(f"Duration: {self._format_duration(duration)}")
+            duration_label.setStyleSheet("color: #666; font-size: 9pt;")
+            row2.addWidget(duration_label)
+            
+            row2.addStretch()
+            
+            # Offset label
+            offset_text = "Base" if i == 0 else f"Offset: {imp.time_offset:+.1f}s"
+            offset_label = QLabel(offset_text)
+            offset_label.setStyleSheet("color: #666; font-size: 9pt;")
+            row2.addWidget(offset_label)
+            self.offset_labels.append(offset_label)
+            
+            # Sync button (not for base import)
+            if i > 0:
+                sync_btn = QPushButton("Sync")
+                sync_btn.setFixedSize(40, 20)
+                sync_btn.setStyleSheet("background-color: #1976D2; color: white; font-size: 8pt;")
+                sync_btn.clicked.connect(lambda checked, idx=i: self.sync_requested.emit(idx))
+                row2.addWidget(sync_btn)
+            
+            entry_layout.addLayout(row2)
+            
+            self.main_layout.addWidget(entry)
+    
+    def update_offset(self, import_index: int, offset: float):
+        """Update the offset display for a specific import."""
+        if import_index < len(self.offset_labels):
+            if import_index == 0:
+                self.offset_labels[import_index].setText("Base")
+            else:
+                self.offset_labels[import_index].setText(f"Offset: {offset:+.1f}s")
 
 
 class SynchronizeDialog(QDialog):
-    """Dialog for adjusting time offsets between imports."""
+    """Dialog for adjusting time offset for a single import."""
     
     # Signal: (import_index, new_offset)
     offset_changed = pyqtSignal(int, float)
     
-    def __init__(self, imports: List[ImportData], parent=None):
+    def __init__(self, import_data: 'ImportData', import_index: int, parent=None):
         super().__init__(parent)
         
-        self.imports = imports
-        self.setWindowTitle("Synchronize Imports")
-        self.setMinimumWidth(400)
+        self.import_index = import_index
+        self.setWindowTitle(f"Synchronize: {import_data.filename}")
+        self.setMinimumWidth(350)
         
         layout = QVBoxLayout(self)
         
-        # Info label
-        info = QLabel("Adjust time offsets for each import relative to the base (first import).")
-        info.setWordWrap(True)
-        layout.addWidget(info)
+        # Color indicator + filename header
+        header = QHBoxLayout()
+        color_label = QLabel()
+        color_label.setFixedSize(20, 20)
+        color_label.setStyleSheet(f"background-color: {import_data.color}; border-radius: 10px;")
+        header.addWidget(color_label)
+        header.addWidget(QLabel(f"<b>{import_data.filename}</b>"))
+        header.addStretch()
+        layout.addLayout(header)
         
-        # Base import (cannot be shifted)
-        base_group = QGroupBox(f"Base: {imports[0].filename}")
-        base_layout = QHBoxLayout(base_group)
-        base_label = QLabel("Offset: 0.0s (fixed)")
-        base_label.setStyleSheet("color: #666;")
-        base_layout.addWidget(base_label)
-        layout.addWidget(base_group)
+        # Current offset display with spinbox
+        offset_layout = QHBoxLayout()
+        offset_layout.addWidget(QLabel("Time Offset:"))
         
-        # Offset controls for each additional import
-        self.offset_spinboxes: List[QDoubleSpinBox] = []
-        btn_style = "background-color: #616161; color: white; font-weight: bold; padding: 2px 6px;"
+        self.offset_spin = QDoubleSpinBox()
+        self.offset_spin.setDecimals(2)
+        self.offset_spin.setSuffix(" s")
+        self.offset_spin.setRange(-999999, 999999)
+        self.offset_spin.setValue(import_data.time_offset)
+        self.offset_spin.valueChanged.connect(lambda val: self.offset_changed.emit(self.import_index, val))
+        offset_layout.addWidget(self.offset_spin)
+        layout.addLayout(offset_layout)
         
-        for i, imp in enumerate(imports[1:], start=1):
-            group = QGroupBox(f"{imp.filename}")
-            group_layout = QVBoxLayout(group)
-            
-            # Color indicator
-            color_label = QLabel()
-            color_label.setFixedSize(20, 20)
-            color_label.setStyleSheet(f"background-color: {imp.color}; border-radius: 10px;")
-            
-            # Current offset display
-            offset_layout = QHBoxLayout()
-            offset_layout.addWidget(QLabel("Offset:"))
-            
-            offset_spin = QDoubleSpinBox()
-            offset_spin.setDecimals(2)
-            offset_spin.setSuffix(" s")
-            offset_spin.setRange(-999999, 999999)
-            offset_spin.setValue(imp.time_offset)
-            offset_spin.valueChanged.connect(lambda val, idx=i: self.offset_changed.emit(idx, val))
-            self.offset_spinboxes.append(offset_spin)
-            offset_layout.addWidget(offset_spin)
-            offset_layout.addWidget(color_label)
-            
-            group_layout.addLayout(offset_layout)
-            
-            # Shift buttons - Row 1 (fine)
-            btn_row1 = QHBoxLayout()
-            for delta, label in [(-0.1, "◀ 0.1s"), (-0.5, "◀ 0.5s"), (-1, "◀ 1s"),
-                                  (1, "1s ▶"), (0.5, "0.5s ▶"), (0.1, "0.1s ▶")]:
-                btn = QPushButton(label)
-                btn.setStyleSheet(btn_style)
-                btn.clicked.connect(lambda checked, idx=i, d=delta: self._shift_offset(idx, d))
-                btn_row1.addWidget(btn)
-            group_layout.addLayout(btn_row1)
-            
-            # Shift buttons - Row 2 (coarse)
-            btn_row2 = QHBoxLayout()
-            for delta, label in [(-5, "◀ 5s"), (-15, "◀ 15s"), (-30, "◀ 30s"),
-                                  (30, "30s ▶"), (15, "15s ▶"), (5, "5s ▶")]:
-                btn = QPushButton(label)
-                btn.setStyleSheet(btn_style)
-                btn.clicked.connect(lambda checked, idx=i, d=delta: self._shift_offset(idx, d))
-                btn_row2.addWidget(btn)
-            group_layout.addLayout(btn_row2)
-            
-            # Shift buttons - Row 3 (very coarse)
-            btn_row3 = QHBoxLayout()
-            for delta, label in [(-60, "◀ 1min"), (-300, "◀ 5min"),
-                                  (300, "5min ▶"), (60, "1min ▶")]:
-                btn = QPushButton(label)
-                btn.setStyleSheet(btn_style)
-                btn.clicked.connect(lambda checked, idx=i, d=delta: self._shift_offset(idx, d))
-                btn_row3.addWidget(btn)
-            group_layout.addLayout(btn_row3)
-            
-            layout.addWidget(group)
+        # Shift buttons - all in one row like time nav
+        btn_style = "background-color: #616161; color: white; font-weight: bold;"
+        nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(2)
+        
+        # All shift buttons in one row
+        shifts = [
+            (-300, "◀5m"), (-60, "◀1m"), (-30, "◀30s"), (-15, "◀15s"),
+            (-5, "◀5s"), (-1, "◀1s"), (-0.5, "◀.5s"), (-0.1, "◀.1s"),
+            (0.1, ".1s▶"), (0.5, ".5s▶"), (1, "1s▶"), (5, "5s▶"),
+            (15, "15s▶"), (30, "30s▶"), (60, "1m▶"), (300, "5m▶")
+        ]
+        
+        for delta, label in shifts:
+            btn = QPushButton(label)
+            btn.setStyleSheet(btn_style)
+            btn.setFixedHeight(24)
+            btn.clicked.connect(lambda checked, d=delta: self._shift_offset(d))
+            nav_layout.addWidget(btn)
+        
+        layout.addLayout(nav_layout)
         
         # Close button
         close_btn = QPushButton("Close")
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
     
-    def _shift_offset(self, import_index: int, delta: float):
-        spinbox = self.offset_spinboxes[import_index - 1]  # -1 because base is not in list
-        new_val = spinbox.value() + delta
-        spinbox.setValue(new_val)
+    def _shift_offset(self, delta: float):
+        new_val = self.offset_spin.value() + delta
+        self.offset_spin.setValue(new_val)
 
 
 class SidebarWindow(QMainWindow):
@@ -402,6 +456,7 @@ class TimeNavigationWidget(QWidget):
         
         layout = QVBoxLayout(self)
         layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(4)
         
         # Time range inputs
         range_layout = QHBoxLayout()
@@ -437,59 +492,53 @@ class TimeNavigationWidget(QWidget):
         
         layout.addLayout(center_layout)
         
-        # Navigation buttons - Row 1 (fine)
-        nav_layout1 = QHBoxLayout()
-        self.btn_left_01 = QPushButton("◀ 0.1s")
-        self.btn_left_05 = QPushButton("◀ 0.5s")
-        self.btn_left_1 = QPushButton("◀ 1s")
-        self.btn_right_1 = QPushButton("1s ▶")
-        self.btn_right_05 = QPushButton("0.5s ▶")
-        self.btn_right_01 = QPushButton("0.1s ▶")
+        # All navigation buttons in ONE row: ◀5m ◀1m ◀30s ◀15s ◀5s ◀1s ◀.5s ◀.1s [Reset] .1s▶ .5s▶ 1s▶ 5s▶ 15s▶ 30s▶ 1m▶ 5m▶
+        nav_layout = QHBoxLayout()
+        nav_layout.setSpacing(2)
         
-        for btn in [self.btn_left_01, self.btn_left_05, self.btn_left_1,
-                    self.btn_right_1, self.btn_right_05, self.btn_right_01]:
-            btn.setFixedHeight(28)
-            nav_layout1.addWidget(btn)
+        # Left buttons (largest to smallest)
+        self.btn_left_5min = QPushButton("◀5m")
+        self.btn_left_1min = QPushButton("◀1m")
+        self.btn_left_30 = QPushButton("◀30s")
+        self.btn_left_15 = QPushButton("◀15s")
+        self.btn_left_5 = QPushButton("◀5s")
+        self.btn_left_1 = QPushButton("◀1s")
+        self.btn_left_05 = QPushButton("◀.5s")
+        self.btn_left_01 = QPushButton("◀.1s")
         
-        layout.addLayout(nav_layout1)
+        # Reset button (red, in center)
+        self.btn_reset = QPushButton("Reset")
+        self.btn_reset.setStyleSheet("background-color: #D32F2F; color: white; font-weight: bold;")
         
-        # Navigation buttons - Row 2 (coarse)
-        nav_layout2 = QHBoxLayout()
-        self.btn_left_5 = QPushButton("◀ 5s")
-        self.btn_left_15 = QPushButton("◀ 15s")
-        self.btn_left_30 = QPushButton("◀ 30s")
-        self.btn_right_30 = QPushButton("30s ▶")
-        self.btn_right_15 = QPushButton("15s ▶")
-        self.btn_right_5 = QPushButton("5s ▶")
+        # Right buttons (smallest to largest)
+        self.btn_right_01 = QPushButton(".1s▶")
+        self.btn_right_05 = QPushButton(".5s▶")
+        self.btn_right_1 = QPushButton("1s▶")
+        self.btn_right_5 = QPushButton("5s▶")
+        self.btn_right_15 = QPushButton("15s▶")
+        self.btn_right_30 = QPushButton("30s▶")
+        self.btn_right_1min = QPushButton("1m▶")
+        self.btn_right_5min = QPushButton("5m▶")
         
-        for btn in [self.btn_left_5, self.btn_left_15, self.btn_left_30,
-                    self.btn_right_30, self.btn_right_15, self.btn_right_5]:
-            btn.setFixedHeight(28)
-            nav_layout2.addWidget(btn)
+        # Add all buttons to layout
+        all_nav_btns = [
+            self.btn_left_5min, self.btn_left_1min, self.btn_left_30, self.btn_left_15,
+            self.btn_left_5, self.btn_left_1, self.btn_left_05, self.btn_left_01,
+            self.btn_reset,
+            self.btn_right_01, self.btn_right_05, self.btn_right_1, self.btn_right_5,
+            self.btn_right_15, self.btn_right_30, self.btn_right_1min, self.btn_right_5min
+        ]
         
-        layout.addLayout(nav_layout2)
+        for btn in all_nav_btns:
+            btn.setFixedHeight(26)
+            btn.setMinimumWidth(10)
+            nav_layout.addWidget(btn)
         
-        # Navigation buttons - Row 3 (very coarse)
-        nav_layout3 = QHBoxLayout()
-        self.btn_left_1min = QPushButton("◀ 1min")
-        self.btn_left_5min = QPushButton("◀ 5min")
-        self.btn_reset = QPushButton("Reset View")
-        self.btn_right_5min = QPushButton("5min ▶")
-        self.btn_right_1min = QPushButton("1min ▶")
+        layout.addLayout(nav_layout)
         
-        # Consistent gray button style
-        btn_style = "background-color: #616161; color: white; font-weight: bold;"
-        self.btn_reset.setStyleSheet(btn_style)
-        
-        for btn in [self.btn_left_1min, self.btn_left_5min, self.btn_reset,
-                    self.btn_right_5min, self.btn_right_1min]:
-            btn.setFixedHeight(28)
-            nav_layout3.addWidget(btn)
-        
-        layout.addLayout(nav_layout3)
-        
-        # Zoom buttons - Row 4
+        # Zoom buttons
         zoom_layout = QHBoxLayout()
+        btn_style = "background-color: #616161; color: white; font-weight: bold;"
         self.btn_zoom_in = QPushButton("🔍+ Zoom In")
         self.btn_zoom_out = QPushButton("🔍- Zoom Out")
         
@@ -501,13 +550,6 @@ class TimeNavigationWidget(QWidget):
             zoom_layout.addWidget(btn)
         
         layout.addLayout(zoom_layout)
-        
-        # Synchronize button - Row 5 (only enabled with 2+ imports)
-        self.btn_synchronize = QPushButton("⏱ Synchronize Imports")
-        self.btn_synchronize.setFixedHeight(32)
-        self.btn_synchronize.setEnabled(False)  # Disabled until 2+ imports
-        self.btn_synchronize.setStyleSheet("background-color: #BDBDBD; color: #757575;")  # Disabled style
-        layout.addWidget(self.btn_synchronize)
 
 
 class OBD2MainWindow(QMainWindow):
@@ -546,6 +588,12 @@ class OBD2MainWindow(QMainWindow):
         
         # Synchronize dialog reference
         self.sync_dialog: Optional[SynchronizeDialog] = None
+        
+        # Delayed sort timer (2 second delay after checkbox toggle)
+        self.sort_timer = QTimer()
+        self.sort_timer.setSingleShot(True)
+        self.sort_timer.setInterval(2000)  # 2 seconds
+        self.sort_timer.timeout.connect(self._sort_channel_controls)
         
         # Split window mode
         self.sidebar_window: Optional['SidebarWindow'] = None
@@ -800,8 +848,8 @@ class OBD2MainWindow(QMainWindow):
         nav.start_input.valueChanged.connect(self._on_time_input_changed)
         nav.end_input.valueChanged.connect(self._on_time_input_changed)
         
-        # Synchronize button
-        nav.btn_synchronize.clicked.connect(self._show_synchronize_dialog)
+        # Import legend sync button
+        self.import_legend.sync_requested.connect(self._show_synchronize_dialog)
         
         # Chart time range changes
         self.chart_widget.time_range_changed.connect(self._on_chart_time_changed)
@@ -842,6 +890,11 @@ class OBD2MainWindow(QMainWindow):
                 QMessageBox.warning(self, "Duplicate Import", 
                     f"This file is already imported:\n{Path(file_path).name}")
                 return
+        
+        # Show loading dialog
+        loading = LoadingDialog(f"Loading {Path(file_path).name}...", self)
+        loading.show()
+        QApplication.processEvents()
         
         try:
             self.statusbar.showMessage(f"Loading {file_path}...")
@@ -895,7 +948,10 @@ class OBD2MainWindow(QMainWindow):
             self._add_to_recent(file_path)
             self._show_viz()
             
+            loading.close()
+            
         except Exception as e:
+            loading.close()
             logger.error(f"Error loading file: {e}")
             QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
             self.statusbar.showMessage("Error loading file")
@@ -917,16 +973,8 @@ class OBD2MainWindow(QMainWindow):
         if not self.imports:
             return
         
-        # Update legend
+        # Update legend (includes per-import sync buttons)
         self.import_legend.update_legend(self.imports)
-        
-        # Enable/disable synchronize button with proper styling
-        has_multiple = len(self.imports) >= 2
-        self.time_nav.btn_synchronize.setEnabled(has_multiple)
-        if has_multiple:
-            self.time_nav.btn_synchronize.setStyleSheet("background-color: #616161; color: white; font-weight: bold;")
-        else:
-            self.time_nav.btn_synchronize.setStyleSheet("background-color: #BDBDBD; color: #757575;")
         
         # Base import defines time range
         base = self.imports[0]
@@ -1035,15 +1083,15 @@ class OBD2MainWindow(QMainWindow):
         """Handle channel visibility toggle for a specific import."""
         self.chart_widget.set_channel_import_visible(channel, import_index, visible)
         
-        # Re-sort channel controls
-        self._sort_channel_controls()
+        # Re-sort channel controls after 2 second delay (restart timer if already running)
+        self.sort_timer.start()
     
-    def _show_synchronize_dialog(self):
-        """Show the synchronize imports dialog."""
-        if len(self.imports) < 2:
+    def _show_synchronize_dialog(self, import_index: int):
+        """Show the synchronize dialog for a specific import."""
+        if import_index >= len(self.imports):
             return
         
-        dialog = SynchronizeDialog(self.imports, self)
+        dialog = SynchronizeDialog(self.imports[import_index], import_index, self)
         dialog.offset_changed.connect(self._on_import_offset_changed)
         dialog.exec()
     
@@ -1052,6 +1100,8 @@ class OBD2MainWindow(QMainWindow):
         if import_index < len(self.imports):
             self.imports[import_index].time_offset = new_offset
             self.chart_widget.update_import_offset(import_index, new_offset)
+            # Update the offset display in the legend
+            self.import_legend.update_offset(import_index, new_offset)
     
     def _load_folder(self, folder_path: str):
         """Load CSV files from a folder."""
