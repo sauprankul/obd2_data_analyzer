@@ -107,20 +107,73 @@ class ChannelPlotWidget(pg.PlotWidget):
                 self.data_lines[import_index].setData([], [])
             return
         
-        # Apply offset to x data for display
-        x_display = x + offset
+        # Apply LOD downsampling for performance
+        x_display, y_display = self._apply_lod(x, y, offset)
         
         color = self.import_colors[import_index] if import_index < len(self.import_colors) else '#1976D2'
         
         if self.data_lines[import_index] is None:
             pen = pg.mkPen(color=color, width=2)
-            self.data_lines[import_index] = self.plot(x_display, y, pen=pen)
+            self.data_lines[import_index] = self.plot(x_display, y_display, pen=pen)
         else:
-            self.data_lines[import_index].setData(x_display, y)
+            self.data_lines[import_index].setData(x_display, y_display)
         
         # Set visibility
         if self.data_lines[import_index]:
             self.data_lines[import_index].setVisible(self.import_data[import_index]['visible'])
+    
+    def _apply_lod(self, x: np.ndarray, y: np.ndarray, offset: float, 
+                   max_points: int = 2000) -> tuple:
+        """Apply Level of Detail downsampling for performance.
+        
+        Uses peak-preserving downsampling to maintain visual fidelity
+        while reducing point count for faster rendering.
+        
+        Args:
+            x: Time values
+            y: Data values  
+            offset: Time offset to apply
+            max_points: Maximum points to render (default 2000)
+            
+        Returns:
+            Tuple of (x_display, y_display) arrays
+        """
+        x_display = x + offset
+        
+        if len(x) <= max_points:
+            return x_display, y
+        
+        # Calculate downsample factor
+        factor = len(x) // max_points
+        
+        # Peak-preserving downsampling: keep min and max in each bin
+        # This preserves spikes and dips that simple decimation would miss
+        n_bins = len(x) // factor
+        x_out = []
+        y_out = []
+        
+        for i in range(n_bins):
+            start = i * factor
+            end = min(start + factor, len(x))
+            chunk_y = y[start:end]
+            chunk_x = x_display[start:end]
+            
+            if len(chunk_y) == 0:
+                continue
+                
+            # Find min and max indices
+            min_idx = np.argmin(chunk_y)
+            max_idx = np.argmax(chunk_y)
+            
+            # Add points in time order
+            if min_idx < max_idx:
+                x_out.extend([chunk_x[min_idx], chunk_x[max_idx]])
+                y_out.extend([chunk_y[min_idx], chunk_y[max_idx]])
+            else:
+                x_out.extend([chunk_x[max_idx], chunk_x[min_idx]])
+                y_out.extend([chunk_y[max_idx], chunk_y[min_idx]])
+        
+        return np.array(x_out), np.array(y_out)
     
     def set_import_visible(self, import_index: int, visible: bool):
         """Set visibility of a specific import's data line."""
@@ -138,8 +191,8 @@ class ChannelPlotWidget(pg.PlotWidget):
         data['offset'] = offset
         
         if data['x'] is not None and len(data['x']) > 0 and self.data_lines[import_index]:
-            x_display = data['x'] + offset
-            self.data_lines[import_index].setData(x_display, data['y'])
+            x_display, y_display = self._apply_lod(data['x'], data['y'], offset)
+            self.data_lines[import_index].setData(x_display, y_display)
     
     def set_x_range(self, x_min: float, x_max: float):
         """Set the X axis range."""

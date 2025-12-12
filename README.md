@@ -3,18 +3,19 @@
 [![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A professional **native Windows application** for visualizing and comparing OBD2 (On-Board Diagnostics) CSV data from vehicles. Built with PyQt6 and PyQtGraph for high-performance, hardware-accelerated chart rendering.
-
-**NO BROWSER. NO WEB SERVER. PURE NATIVE WINDOWS.**
+A professional **native Windows application** for visualizing and comparing OBD2 (On-Board Diagnostics) CSV data from vehicles. Built with PyQt6 and PyQtGraph for high-performance chart rendering.
 
 ## 🚀 Features
 
 - **Native Windows Application**: Fast, responsive UI with no browser overhead
-- **Hardware-Accelerated Charts**: PyQtGraph with OpenGL for smooth rendering of millions of data points
+- **Multi-Import Comparison**: Load multiple CSV files and compare them side-by-side with time synchronization
+- **Math Channels**: Create calculated channels using expressions like `(A/0.45) * 14.7`
 - **Multi-Channel CSV Support**: Handles interleaved multi-channel OBD2 data (Car Scanner format)
 - **Synchronized Time Navigation**: All channels stay in sync with granular time controls (0.1s to 5min)
-- **Channel Visibility Controls**: Show/hide individual channels with color-coded indicators
-- **Crosshair & Value Display**: Hover over charts to see exact values
+- **Channel Visibility Controls**: Show/hide individual channels with per-import checkboxes
+- **LOD Optimization**: Level-of-detail downsampling for smooth performance with large datasets
+- **Crosshair & Value Display**: Click on charts to see exact values from all imports
+- **Adjustable Graph Heights**: Taller/Shorter buttons to customize chart sizes
 - **Recent Files**: Quick access to recently analyzed data
 - **Window State Persistence**: Remembers window size, position, and panel layout
 
@@ -102,24 +103,24 @@ SECONDS;VALUE;UNITS;PID
 The application follows a clean, modular architecture:
 
 ```
-src/obd2_viewer/
-├── core/                    # Core data processing
-│   ├── data_loader.py      # CSV file loading and validation
-│   └── data_processor.py   # Data filtering and analysis
-├── visualization/          # Dashboard and charts
-│   └── dashboard.py        # Main Dash application
-├── app/                     # Main application
-│   └── main_application.py  # File upload and routing
-└── utils/                   # Utilities
-    └── file_utils.py        # File processing utilities
+src/
+├── obd2_native.py              # Application entry point
+└── obd2_viewer/
+    ├── core/                   # Core data processing
+    │   ├── data_loader.py      # CSV file loading and validation
+    │   ├── data_processor.py   # Data filtering and analysis
+    │   └── multi_channel_parser.py  # Multi-channel CSV parsing
+    └── native/                 # Native Windows GUI
+        ├── main_window.py      # Main application window
+        └── chart_widget.py     # PyQtGraph chart components
 ```
 
 ### Key Components
 
 - **OBDDataLoader**: Handles CSV file loading with automatic format detection
-- **OBDDataProcessor**: Provides data filtering, statistics, and group management
-- **OBD2Dashboard**: Creates the interactive web visualization
-- **OBD2ViewerApp**: Main application with file upload interface
+- **MultiChannelCSVParser**: Parses interleaved multi-channel CSV files
+- **OBD2MainWindow**: Main PyQt6 application window with all controls
+- **OBD2ChartWidget**: High-performance chart rendering with LOD optimization
 
 ## 🧪 Testing
 
@@ -186,46 +187,17 @@ bandit -r src/
 from obd2_viewer.core.data_loader import OBDDataLoader
 
 loader = OBDDataLoader("path/to/csv/files")
-data = loader.load_csv_files()
-units = loader.get_units(data)
+channels_data, units = loader.load_csv_files()
 ```
 
-### OBDDataProcessor
+### Running the Application
 
 ```python
-from obd2_viewer.core.data_processor import OBDDataProcessor
+# From command line
+python src/obd2_native.py
 
-processor = OBDDataProcessor()
-filtered_data = processor.filter_data_by_time(data, start_time, end_time)
-stats = processor.get_statistics(data, "engine_rpm")
+# Or double-click run_native.bat
 ```
-
-### OBD2Dashboard
-
-```python
-from obd2_viewer.visualization.dashboard import OBD2Dashboard
-
-dashboard = OBD2Dashboard(data, units, display_names)
-dashboard.run(debug=True, port=8052)
-```
-
-## 🚀 Deployment
-
-### Docker (Coming Soon)
-
-```bash
-docker build -t obd2-viewer .
-docker run -p 8052:8052 obd2-viewer
-```
-
-### Production
-
-For production deployment, consider:
-
-1. Use a production WSGI server (Gunicorn, uWSGI)
-2. Set up reverse proxy (Nginx, Apache)
-3. Configure SSL/TLS
-4. Set up monitoring and logging
 
 ## 🤝 Contributing
 
@@ -260,20 +232,17 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-- Built with [Plotly Dash](https://dash.plotly.com/)
-- UI components from [Dash Bootstrap Components](https://dash-bootstrap-components.opensource.faculty.ai/)
-- Data processing with [Pandas](https://pandas.pydata.org/)
+- Built with [PyQt6](https://www.riverbankcomputing.com/software/pyqt/)
+- Charts powered by [PyQtGraph](https://www.pyqtgraph.org/)
+- Data processing with [Pandas](https://pandas.pydata.org/) and [NumPy](https://numpy.org/)
 
 ## 📈 Roadmap
 
-- [ ] Docker containerization
-- [ ] Cloud deployment options
-- [ ] Advanced data analysis features
-- [ ] Real-time data streaming support
-- [ ] Mobile-responsive design improvements
-- [ ] Additional chart types
-- [ ] Data export in multiple formats
-- [ ] User authentication and sharing
+- [ ] Chart export (PNG, SVG)
+- [ ] Advanced math operations (rolling average, derivatives)
+- [ ] Data annotations and markers
+- [ ] Session save/restore
+- [ ] Additional CSV format support
 
 ---
 

@@ -634,9 +634,11 @@ class SidebarWindow(QMainWindow):
 class HomeWidget(QWidget):
     """Home screen showing past imports."""
     
-    # Signal emitted when user wants to open a file
+    # Signal emitted when user wants to open a file (single or multiple)
     open_file_requested = pyqtSignal(str)
+    open_files_requested = pyqtSignal(list)  # For multiple files
     open_new_requested = pyqtSignal()
+    clear_history_requested = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -659,7 +661,7 @@ class HomeWidget(QWidget):
         
         # Open new file button
         btn_style = "background-color: #1976D2; color: white; font-weight: bold; font-size: 14pt; padding: 15px 30px; border-radius: 5px;"
-        self.open_btn = QPushButton("📂 Open CSV File")
+        self.open_btn = QPushButton("📂 Open CSV File(s)")
         self.open_btn.setStyleSheet(btn_style)
         self.open_btn.clicked.connect(self.open_new_requested.emit)
         layout.addWidget(self.open_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -667,20 +669,34 @@ class HomeWidget(QWidget):
         layout.addSpacing(30)
         
         # Past imports section
-        past_label = QLabel("Past Imports")
+        past_label = QLabel("Past Imports (select multiple with Ctrl+Click)")
         past_label.setStyleSheet("font-size: 14pt; font-weight: bold;")
         layout.addWidget(past_label)
         
         self.past_list = QListWidget()
         self.past_list.setMinimumHeight(200)
+        self.past_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)  # Allow multi-select
         self.past_list.itemDoubleClicked.connect(self._on_item_double_clicked)
         layout.addWidget(self.past_list)
+        
+        # Buttons row
+        btn_row = QHBoxLayout()
+        
+        # Open selected button
+        self.open_selected_btn = QPushButton("Open Selected")
+        self.open_selected_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold;")
+        self.open_selected_btn.clicked.connect(self._open_selected)
+        btn_row.addWidget(self.open_selected_btn)
+        
+        btn_row.addStretch()
         
         # Clear button
         clear_btn = QPushButton("Clear History")
         clear_btn.setStyleSheet("background-color: #616161; color: white;")
         clear_btn.clicked.connect(self._clear_history)
-        layout.addWidget(clear_btn, alignment=Qt.AlignmentFlag.AlignRight)
+        btn_row.addWidget(clear_btn)
+        
+        layout.addLayout(btn_row)
         
         layout.addStretch()
     
@@ -702,10 +718,24 @@ class HomeWidget(QWidget):
         if path:
             self.open_file_requested.emit(path)
     
+    def _open_selected(self):
+        """Open all selected items."""
+        selected_items = self.past_list.selectedItems()
+        paths = []
+        for item in selected_items:
+            path = item.data(Qt.ItemDataRole.UserRole)
+            if path:
+                paths.append(path)
+        
+        if len(paths) == 1:
+            self.open_file_requested.emit(paths[0])
+        elif len(paths) > 1:
+            self.open_files_requested.emit(paths)
+    
     def _clear_history(self):
         self.past_list.clear()
         # Signal to parent to clear settings
-        self.parent().clear_recent_files()
+        self.clear_history_requested.emit()
 
 
 class TimeNavigationWidget(QWidget):
@@ -892,7 +922,9 @@ class OBD2MainWindow(QMainWindow):
         # Home screen (index 0)
         self.home_widget = HomeWidget(self)
         self.home_widget.open_file_requested.connect(self._load_file)
+        self.home_widget.open_files_requested.connect(self._load_multiple_files)
         self.home_widget.open_new_requested.connect(self._open_file_dialog)
+        self.home_widget.clear_history_requested.connect(self.clear_recent_files)
         self.stacked_widget.addWidget(self.home_widget)
         
         # Visualization screen (index 1)
@@ -1148,16 +1180,31 @@ class OBD2MainWindow(QMainWindow):
         self.chart_widget.make_plots_shorter()
     
     def _open_file_dialog(self):
-        """Open file dialog to select CSV file."""
-        file_path, _ = QFileDialog.getOpenFileName(
+        """Open file dialog to select one or more CSV files."""
+        file_paths, _ = QFileDialog.getOpenFileNames(
             self,
-            "Open OBD2 CSV File",
+            "Open OBD2 CSV File(s)",
             "",
             "CSV Files (*.csv);;All Files (*)"
         )
         
-        if file_path:
-            self._load_file(file_path)
+        if file_paths:
+            if len(file_paths) == 1:
+                self._load_file(file_paths[0])
+            else:
+                self._load_multiple_files(file_paths)
+    
+    def _load_multiple_files(self, file_paths: List[str]):
+        """Load multiple CSV files as separate imports."""
+        if not file_paths:
+            return
+        
+        # Load first file as primary import
+        self._load_file(file_paths[0], is_additional=False)
+        
+        # Load remaining files as additional imports
+        for path in file_paths[1:]:
+            self._load_file(path, is_additional=True)
     
     def _open_folder_dialog(self):
         """Open folder dialog to select directory with CSV files."""
