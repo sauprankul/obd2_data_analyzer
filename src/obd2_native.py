@@ -46,7 +46,7 @@ def main():
         # Import PyQt6 - this will fail fast if not installed
         from PyQt6.QtWidgets import QApplication
         from PyQt6.QtCore import Qt
-        from PyQt6.QtGui import QFont
+        from PyQt6.QtGui import QFont, QIcon
         
         # Import our native window
         from obd2_viewer.native.main_window import OBD2MainWindow
@@ -65,6 +65,14 @@ def main():
         # Set default font
         font = QFont("Segoe UI", 9)
         app.setFont(font)
+        
+        # Set application icon (for taskbar)
+        icon_path = Path(__file__).parent.parent / "logo.png"
+        if getattr(sys, 'frozen', False):
+            # Running as compiled exe - logo.png is in parent folder (project root)
+            icon_path = Path(sys.executable).parent.parent / "logo.png"
+        if icon_path.exists():
+            app.setWindowIcon(QIcon(str(icon_path)))
         
         # Create and show main window
         window = OBD2MainWindow()

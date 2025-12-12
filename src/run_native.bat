@@ -29,7 +29,7 @@ if errorlevel 1 (
 
 REM Run the native application
 echo Starting native application...
-python src\obd2_native.py
+python obd2_native.py
 
 if errorlevel 1 (
     echo.

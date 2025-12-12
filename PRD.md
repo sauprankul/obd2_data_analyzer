@@ -419,18 +419,16 @@ A professional **native Windows application** for importing, processing, and vis
 
 ## Implementation Priority
 
-### Phase 1 (MVP)
+### Phase 1 (MVP) ✅ COMPLETE
 
 1. Multi-channel CSV parsing
 2. Basic multi-import support
-3. Improved layout system
-4. Snapshot functionality
 
 ### Phase 2 ✅ COMPLETE
 
 1. ✅ Math channel creation
 2. ✅ Advanced time controls
-3. ✅ Performance optimizations (LOD downsampling)
+3. ✅ Performance optimizations (LOD downsampling, caching)
 4. ✅ Enhanced UI/UX (Taller/Shorter, loading spinner)
 
 ### Phase 3
@@ -463,13 +461,26 @@ A professional **native Windows application** for importing, processing, and vis
 - Multi-channel and single-channel test data properly organized
 - All tests passing, confirming backend functionality
 
+### ✅ PyInstaller PyQt6 DLL Load Failure - RESOLVED
+
+**Issue:** `DLL load failed while importing QtWidgets: The specified procedure could not be found` when running the PyInstaller-built exe
+**Status:** FIXED (Dec 2024)
+**Root Cause:** PyQt6 6.10.1 has DLL loading compatibility issues with PyInstaller on Windows. The newer PyQt6 version's `.pyd` bindings couldn't locate the correct Qt6 DLL procedures when bundled by PyInstaller. Additionally, `shiboken2` (PySide2's Qt5 binding library) was being bundled and conflicting with PyQt6/Qt6.
+**Solution:** 
+1. Downgraded PyQt6 from 6.10.1 to 6.5.2 (`pip install PyQt6==6.5.2 PyQt6-Qt6==6.5.2 PyQt6-sip==13.5.2`)
+2. Added exclusions for `PySide2`, `shiboken2`, `PySide6`, `shiboken6`, `PyQt5` in the spec file to prevent Qt version conflicts
+3. Pinned PyQt6 version in `requirements.txt` to `>=6.5.0,<6.6.0`
+
+**Files Modified:**
+
+- `requirements.txt` - Pinned PyQt6 to 6.5.x series
+- `run/obd2_analyzer.spec` - Added PySide/shiboken exclusions, added runtime hook for DLL path setup
+
 ## Known Limitations
 
-1. **Current Implementation:** ✅ Multi-import fully supported
-2. **Performance:** ✅ LOD downsampling handles large datasets efficiently
-3. **Data Formats:** Only supports semicolon-delimited CSV with SECONDS;PID;VALUE;UNITS columns
-4. **Export:** No chart export functionality
-5. **Scroll Zoom:** ✅ Capped to prevent zooming beyond data range
+1. **Data Formats:** Only supports semicolon-delimited CSV with SECONDS;PID;VALUE;UNITS columns
+2. **Export:** No chart export functionality
+3. **Views:** No way to save views and pull them up later.
 
 ## Success Metrics
 

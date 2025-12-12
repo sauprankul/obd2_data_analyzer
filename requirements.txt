@@ -7,5 +7,6 @@ numpy>=1.21.0
 scipy>=1.7.0
 
 # Native Windows GUI
-PyQt6>=6.4.0
+# Pin PyQt6 to 6.5.x - version 6.10.x has DLL loading issues with PyInstaller
+PyQt6>=6.5.0,<6.6.0
 pyqtgraph>=0.13.0
