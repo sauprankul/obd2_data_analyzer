@@ -72,7 +72,10 @@ a = Analysis(
         qt6_bin_path,
     ],
     binaries=qt_binaries,
-    datas=[],  # Logo is loaded from parent folder at runtime
+    datas=[
+        # Include loading.gif for the spinner animation
+        (os.path.join(project_root, 'src', 'obd2_viewer', 'native', 'loading.gif'), 'obd2_viewer/native'),
+    ],
     hiddenimports=[
         'PyQt6',
         'PyQt6.QtCore',

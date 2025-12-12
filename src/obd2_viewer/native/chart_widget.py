@@ -74,8 +74,32 @@ class ChannelPlotWidget(pg.PlotWidget):
         
         
     def wheelEvent(self, event):
-        """Override wheel event to prevent zoom - let parent scroll area handle it."""
-        event.ignore()  # Pass to parent (scroll area)
+        """Override wheel event - Ctrl+scroll zooms X axis, otherwise scroll container."""
+        from PyQt6.QtCore import Qt
+        
+        if event.modifiers() == Qt.KeyboardModifier.ControlModifier:
+            # Ctrl+scroll: zoom X axis
+            delta = event.angleDelta().y()
+            if delta != 0:
+                # Get current view range
+                view_range = self.viewRange()
+                x_min, x_max = view_range[0]
+                x_center = (x_min + x_max) / 2
+                x_range = x_max - x_min
+                
+                # Zoom factor: scroll up = zoom in, scroll down = zoom out
+                zoom_factor = 0.9 if delta > 0 else 1.1
+                new_range = x_range * zoom_factor
+                
+                # Apply new range centered on current center
+                new_min = x_center - new_range / 2
+                new_max = x_center + new_range / 2
+                self.setXRange(new_min, new_max, padding=0)
+                
+            event.accept()
+        else:
+            # Normal scroll: pass to parent (scroll area)
+            event.ignore()
         
     def set_import_count(self, count: int, colors: List[str]):
         """Initialize data structures for the given number of imports."""
@@ -386,8 +410,19 @@ class OBD2ChartWidget(QWidget):
             plot.deleteLater()
         self.plots.clear()
         
+        # Sort channels by unit then alphabetically (matching sidebar organization)
+        def get_channel_sort_key(ch):
+            unit = ''
+            for imp in self.imports:
+                if ch in imp.channels_data:
+                    unit = imp.units.get(ch, '')
+                    break
+            return (unit.lower(), ch.lower())
+        
+        sorted_channels = sorted(channels, key=get_channel_sort_key)
+        
         # Create new plots
-        for channel in sorted(channels):
+        for channel in sorted_channels:
             # Get display name and unit from first import that has this channel
             display_name = channel
             unit = ''
@@ -641,3 +676,119 @@ class OBD2ChartWidget(QWidget):
         for plot in self.plots.values():
             plot.setMinimumHeight(self._plot_height_min)
             plot.setMaximumHeight(self._plot_height_max)
+    
+    def set_filter_mask(self, filter_masks: Optional[Dict[int, Dict[str, np.ndarray]]], 
+                        filter_intervals: Optional[Dict[int, List[tuple]]] = None):
+        """Apply filter masks to control which data points are visible.
+        
+        Args:
+            filter_masks: Dict mapping import_index -> {channel_name: bool_mask_array}
+                         If None, all data is shown (no filtering).
+            filter_intervals: Dict mapping import_index -> [(start, end), ...] merged intervals.
+                             Used to insert NaN separators between non-overlapping intervals.
+        """
+        self._filter_masks = filter_masks
+        self._filter_intervals = filter_intervals
+        
+        if filter_masks is None:
+            # No filtering - restore all data
+            self._update_plots()
+            return
+        
+        # Apply masks to each plot
+        for channel, plot in self.plots.items():
+            for i, imp in enumerate(self.imports):
+                if channel not in imp.channels_data:
+                    continue
+                
+                df = imp.channels_data[channel]
+                if len(df) == 0:
+                    continue
+                
+                x = df['SECONDS'].values
+                y = df['VALUE'].values
+                
+                # Check if we have a mask for this import/channel
+                if i in filter_masks and channel in filter_masks[i]:
+                    mask = filter_masks[i][channel]
+                    
+                    # Apply mask - only show points where mask is True
+                    if len(mask) == len(x):
+                        x_filtered = x[mask]
+                        y_filtered = y[mask]
+                        
+                        # Insert NaN separators between non-overlapping intervals
+                        if filter_intervals and i in filter_intervals and len(filter_intervals[i]) > 1:
+                            x_filtered, y_filtered = self._insert_nan_separators(
+                                x_filtered, y_filtered, filter_intervals[i]
+                            )
+                    else:
+                        # Mask length mismatch - show all data
+                        x_filtered = x
+                        y_filtered = y
+                else:
+                    # No mask for this channel - show all data
+                    x_filtered = x
+                    y_filtered = y
+                
+                # Update plot with filtered data
+                plot.set_import_data(i, x_filtered, y_filtered, imp.time_offset)
+    
+    def _insert_nan_separators(self, x: np.ndarray, y: np.ndarray, 
+                                intervals: List[tuple]) -> tuple:
+        """Insert NaN values between non-overlapping intervals to break lines.
+        
+        Args:
+            x: Time values (already filtered)
+            y: Data values (already filtered)
+            intervals: List of (start, end) merged intervals
+            
+        Returns:
+            (x_with_nans, y_with_nans) arrays with NaN separators inserted
+        """
+        if len(x) == 0 or len(intervals) <= 1:
+            return x, y
+        
+        # For each point, determine which interval it belongs to
+        interval_starts = np.array([iv[0] for iv in intervals])
+        interval_ends = np.array([iv[1] for iv in intervals])
+        
+        # Find interval index for each point
+        point_intervals = np.searchsorted(interval_starts, x, side='right') - 1
+        
+        # Find where interval changes (transition points)
+        interval_changes = np.where(np.diff(point_intervals) != 0)[0]
+        
+        if len(interval_changes) == 0:
+            # All points in same interval - no breaks needed
+            return x, y
+        
+        # Build new arrays with NaN separators at interval boundaries
+        # Each transition needs one NaN inserted
+        new_len = len(x) + len(interval_changes)
+        x_new = np.empty(new_len)
+        y_new = np.empty(new_len)
+        
+        src_idx = 0
+        dst_idx = 0
+        
+        for change_idx in interval_changes:
+            # Copy points up to and including the change point
+            count = change_idx - src_idx + 1
+            x_new[dst_idx:dst_idx + count] = x[src_idx:src_idx + count]
+            y_new[dst_idx:dst_idx + count] = y[src_idx:src_idx + count]
+            dst_idx += count
+            src_idx += count
+            
+            # Insert NaN separator
+            x_new[dst_idx] = np.nan
+            y_new[dst_idx] = np.nan
+            dst_idx += 1
+        
+        # Copy remaining points
+        remaining = len(x) - src_idx
+        if remaining > 0:
+            x_new[dst_idx:dst_idx + remaining] = x[src_idx:]
+            y_new[dst_idx:dst_idx + remaining] = y[src_idx:]
+        
+        return x_new, y_new

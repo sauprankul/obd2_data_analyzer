@@ -23,8 +23,8 @@ from PyQt6.QtWidgets import (
     QDialog, QListWidget, QListWidgetItem, QStackedWidget, QGridLayout,
     QComboBox
 )
-from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer, QStringListModel
-from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont, QColor
+from PyQt6.QtCore import Qt, QSettings, QSize, pyqtSignal, QTimer, QStringListModel, QThread
+from PyQt6.QtGui import QAction, QIcon, QKeySequence, QFont, QColor, QMovie
 from PyQt6.QtWidgets import QCompleter
 
 from .chart_widget import OBD2ChartWidget
@@ -33,68 +33,55 @@ from ..core.data_loader import OBDDataLoader
 logger = logging.getLogger(__name__)
 
 
-class SpinnerWidget(QWidget):
-    """Animated spinner widget."""
+class FileLoaderThread(QThread):
+    """Background thread for loading CSV files without blocking the UI."""
     
-    def __init__(self, parent=None):
+    finished = pyqtSignal(dict, dict)  # channels_data, units
+    error = pyqtSignal(str)  # error message
+    
+    def __init__(self, file_path: str, parent=None):
         super().__init__(parent)
-        self.setFixedSize(48, 48)
-        self.angle = 0
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self._rotate)
-        self.timer.start(50)  # 20 FPS
+        self.file_path = file_path
     
-    def _rotate(self):
-        self.angle = (self.angle + 30) % 360
-        self.update()
-    
-    def paintEvent(self, event):
-        from PyQt6.QtGui import QPainter, QPen, QColor
-        painter = QPainter(self)
-        painter.setRenderHint(QPainter.RenderHint.Antialiasing)
-        
-        # Draw spinning arcs
-        pen = QPen(QColor('#1976D2'))
-        pen.setWidth(4)
-        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
-        painter.setPen(pen)
-        
-        rect = self.rect().adjusted(6, 6, -6, -6)
-        
-        # Draw multiple arcs at different positions
-        for i in range(8):
-            opacity = 1.0 - (i * 0.1)
-            color = QColor('#1976D2')
-            color.setAlphaF(opacity)
-            pen.setColor(color)
-            painter.setPen(pen)
-            
-            start_angle = (self.angle - i * 45) * 16  # Qt uses 1/16th of a degree
-            span_angle = 30 * 16
-            painter.drawArc(rect, start_angle, span_angle)
-    
-    def stop(self):
-        self.timer.stop()
+    def run(self):
+        try:
+            loader = OBDDataLoader(str(Path(self.file_path).parent))
+            channels_data, units = loader.load_single_file(self.file_path)
+            self.finished.emit(channels_data, units)
+        except Exception as e:
+            self.error.emit(str(e))
 
 
 class LoadingDialog(QDialog):
-    """Loading dialog with animated spinner."""
+    """Loading dialog with animated GIF spinner."""
     
     def __init__(self, message: str = "Loading...", parent=None):
         super().__init__(parent)
         self.setWindowTitle("Loading")
         self.setModal(True)
-        self.setFixedSize(320, 120)
+        self.setFixedSize(320, 140)
         self.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.CustomizeWindowHint | Qt.WindowType.WindowTitleHint)
         
         layout = QVBoxLayout(self)
         layout.setSpacing(15)
         
-        # Spinner
+        # Animated GIF spinner
         spinner_layout = QHBoxLayout()
         spinner_layout.addStretch()
-        self.spinner = SpinnerWidget()
-        spinner_layout.addWidget(self.spinner)
+        
+        self.spinner_label = QLabel()
+        self.spinner_label.setFixedSize(64, 64)
+        self.spinner_label.setScaledContents(True)
+        
+        # Load animated GIF
+        import os
+        gif_path = os.path.join(os.path.dirname(__file__), 'loading.gif')
+        self.movie = QMovie(gif_path)
+        self.movie.setScaledSize(QSize(64, 64))
+        self.spinner_label.setMovie(self.movie)
+        self.movie.start()
+        
+        spinner_layout.addWidget(self.spinner_label)
         spinner_layout.addStretch()
         layout.addLayout(spinner_layout)
         
@@ -105,6 +92,15 @@ class LoadingDialog(QDialog):
         self.label.setStyleSheet("font-size: 11pt;")
         self.label.setMinimumHeight(30)
         layout.addWidget(self.label)
+        
+        # Timer to keep animation running during blocking operations
+        self.event_timer = QTimer(self)
+        self.event_timer.timeout.connect(self._process_events)
+        self.event_timer.start(50)  # Process events every 50ms
+    
+    def _process_events(self):
+        """Keep the event loop responsive for animation."""
+        QApplication.processEvents()
     
     def set_message(self, message: str):
         # Scale font if text is too long
@@ -118,7 +114,8 @@ class LoadingDialog(QDialog):
         QApplication.processEvents()
     
     def closeEvent(self, event):
-        self.spinner.stop()
+        self.event_timer.stop()
+        self.movie.stop()
         super().closeEvent(event)
 
 
@@ -187,25 +184,25 @@ class MultiImportChannelControl(QWidget):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
         
-        # Channel name label (no unit - unit shown in section header)
-        name_label = QLabel(display_name)
-        name_label.setMinimumWidth(150)
-        layout.addWidget(name_label)
-        
-        # One checkbox per import, with color indicator
+        # Checkboxes with color indicators on the LEFT (matching Filters layout)
         for i, color in enumerate(import_colors):
-            # Color indicator
-            color_label = QLabel()
-            color_label.setFixedSize(12, 12)
-            color_label.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
-            layout.addWidget(color_label)
-            
-            # Checkbox
+            # Checkbox first
             cb = QCheckBox()
             cb.setChecked(True)
             cb.stateChanged.connect(lambda state, idx=i: self._on_checkbox_changed(idx, state))
             self.checkboxes.append(cb)
             layout.addWidget(cb)
+            
+            # Color indicator after checkbox
+            color_label = QLabel()
+            color_label.setFixedSize(12, 12)
+            color_label.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
+            layout.addWidget(color_label)
+        
+        # Channel name label (no unit - unit shown in section header)
+        name_label = QLabel(display_name)
+        name_label.setMinimumWidth(150)
+        layout.addWidget(name_label, 1)
         
         # Edit button for math channels
         if is_math_channel:
@@ -215,8 +212,6 @@ class MultiImportChannelControl(QWidget):
             edit_btn.setStyleSheet("background-color: #7B1FA2; color: white; font-size: 10pt;")
             edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.channel_name))
             layout.addWidget(edit_btn)
-        
-        layout.addStretch()
     
     def _on_checkbox_changed(self, import_index: int, state: int):
         visible = state == Qt.CheckState.Checked.value
@@ -432,23 +427,157 @@ class SynchronizeDialog(QDialog):
         self.offset_spin.setValue(new_val)
 
 
-class MathChannelDialog(QDialog):
-    """Dialog for creating or editing a math channel from an expression."""
+# Shared help text for expression dialogs (DRY)
+EXPRESSION_HELP_TEXT = (
+    "<b>Inputs:</b> A, B, C, D, E<br>"
+    "<b>Arithmetic:</b> +, -, *, /, **, %, comparisons (&lt;, &gt;, ==)<br>"
+    "<b>Boolean:</b> &amp; (and), | (or), ~ (not)<br>"
+    "<b>Functions:</b> abs, min, max, sqrt, log, exp, sin, cos, round, pow, floor, ceil<br>"
+    "<b>Statistical:</b> rolling_avg(X, secs), rolling_min(X, secs), rolling_max(X, secs), delta, clip(X, min, max)<br>"
+    "<b>Conditional:</b> if_else(condition, true_value, false_value)"
+)
+
+
+# Helper functions for math channel expressions
+def _get_math_functions():
+    """Return dict of safe math functions available in expressions."""
+    import numpy as np
+    return {
+        # Basic math
+        'abs': abs,
+        'min': min,
+        'max': max,
+        'round': round,
+        'pow': pow,
+        # Numpy math functions
+        'sqrt': np.sqrt,
+        'log': np.log,
+        'log10': np.log10,
+        'exp': np.exp,
+        'sin': np.sin,
+        'cos': np.cos,
+        'tan': np.tan,
+        'floor': np.floor,
+        'ceil': np.ceil,
+        # Constants
+        'pi': np.pi,
+        'e': np.e,
+    }
+
+
+def _get_statistical_functions(times: 'np.ndarray' = None):
+    """Return dict of statistical functions for array operations.
     
-    # Signal: (name, expression, input_a, input_b, unit)
-    channel_created = pyqtSignal(str, str, str, str, str)
+    Args:
+        times: Optional array of timestamps in seconds. If provided, rolling
+               window functions will use seconds instead of data points.
+    """
+    import numpy as np
+    
+    def _seconds_to_points(seconds: float) -> int:
+        """Convert seconds to approximate number of data points based on sample rate."""
+        if times is None or len(times) < 2:
+            return max(1, int(seconds))  # Fallback: treat as points
+        # Estimate sample rate from timestamps
+        avg_dt = (times[-1] - times[0]) / (len(times) - 1)
+        if avg_dt <= 0:
+            return max(1, int(seconds))
+        points = int(seconds / avg_dt)
+        return max(1, points)
+    
+    def rolling_avg(arr, window_seconds):
+        """Compute rolling average with given window size in seconds."""
+        window = _seconds_to_points(window_seconds)
+        result = np.convolve(arr, np.ones(window)/window, mode='same')
+        # Handle edges - use available data
+        half = window // 2
+        for i in range(half):
+            if i < len(arr):
+                result[i] = np.mean(arr[:i+half+1])
+        for i in range(len(arr) - half, len(arr)):
+            if i >= 0:
+                result[i] = np.mean(arr[i-half:])
+        return result
+    
+    def rolling_min(arr, window_seconds):
+        """Compute rolling minimum with given window size in seconds."""
+        window = _seconds_to_points(window_seconds)
+        result = np.zeros_like(arr)
+        for i in range(len(arr)):
+            start = max(0, i - window // 2)
+            end = min(len(arr), i + window // 2 + 1)
+            result[i] = np.min(arr[start:end])
+        return result
+    
+    def rolling_max(arr, window_seconds):
+        """Compute rolling maximum with given window size in seconds."""
+        window = _seconds_to_points(window_seconds)
+        result = np.zeros_like(arr)
+        for i in range(len(arr)):
+            start = max(0, i - window // 2)
+            end = min(len(arr), i + window // 2 + 1)
+            result[i] = np.max(arr[start:end])
+        return result
+    
+    def delta(arr):
+        """Compute point-to-point difference (derivative approximation)."""
+        result = np.zeros_like(arr)
+        result[1:] = np.diff(arr)
+        result[0] = result[1] if len(result) > 1 else 0
+        return result
+    
+    def cumsum(arr):
+        """Compute cumulative sum."""
+        return np.cumsum(arr)
+    
+    def clip(arr, min_val, max_val):
+        """Clip values to range [min_val, max_val]."""
+        return np.clip(arr, min_val, max_val)
+    
+    return {
+        'rolling_avg': rolling_avg,
+        'rolling_min': rolling_min,
+        'rolling_max': rolling_max,
+        'delta': delta,
+        'cumsum': cumsum,
+        'clip': clip,
+        'np_min': np.min,  # Array-wide min
+        'np_max': np.max,  # Array-wide max
+        'np_mean': np.mean,  # Array-wide mean
+        'np_std': np.std,  # Standard deviation
+    }
+
+
+class MathChannelDialog(QDialog):
+    """Dialog for creating or editing a math channel from an expression.
+    
+    Supports up to 5 input channels (A, B, C, D, E) and provides:
+    - Basic math operations: +, -, *, /, **, %
+    - Comparison operators: <, >, <=, >=, ==, !=
+    - Conditional expressions: if_else(condition, true_val, false_val)
+    - Math functions: abs, min, max, sqrt, log, exp, sin, cos, etc.
+    - Statistical functions: rolling_avg, rolling_min, rolling_max, delta, etc.
+    """
+    
+    # Signal: (name, expression, inputs_dict_json, unit)
+    channel_created = pyqtSignal(str, str, str, str)
+    
+    # Input labels
+    INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
     
     def __init__(self, available_channels: List[str], available_units: List[str],
                  channel_units: Dict[str, str] = None, edit_data: Optional[Dict] = None, parent=None):
         super().__init__(parent)
         
-        self.available_channels = sorted(available_channels)
         self.channel_units = channel_units or {}
+        # Sort channels by unit then alphabetically, format with unit suffix
+        self.available_channels = available_channels
+        self.sorted_channel_items = self._sort_channels_by_unit(available_channels)
         self.edit_mode = edit_data is not None
         self.original_name = edit_data.get('name', '') if edit_data else ''
         
         self.setWindowTitle("Edit Math Channel" if self.edit_mode else "Create Math Channel")
-        self.setMinimumWidth(450)
+        self.setMinimumWidth(550)
         
         layout = QVBoxLayout(self)
         
@@ -461,50 +590,63 @@ class MathChannelDialog(QDialog):
         name_layout.addWidget(self.name_input)
         layout.addLayout(name_layout)
         
-        # Input A selection
-        input_a_layout = QHBoxLayout()
-        input_a_layout.addWidget(QLabel("Input A:"))
-        self.input_a_combo = QComboBox()
-        self.input_a_combo.addItems(self.available_channels)
-        self.input_a_unit_label = QLabel("")
-        self.input_a_unit_label.setStyleSheet("color: #666; font-style: italic;")
-        self.input_a_combo.currentTextChanged.connect(self._update_unit_labels)
-        input_a_layout.addWidget(self.input_a_combo)
-        input_a_layout.addWidget(self.input_a_unit_label)
-        layout.addLayout(input_a_layout)
+        # Input channels section
+        inputs_group = QGroupBox("Input Channels")
+        inputs_layout = QGridLayout(inputs_group)
         
-        # Input B selection (optional)
-        input_b_layout = QHBoxLayout()
-        input_b_layout.addWidget(QLabel("Input B (optional):"))
-        self.input_b_combo = QComboBox()
-        self.input_b_combo.addItem("(None)")
-        self.input_b_combo.addItems(self.available_channels)
-        self.input_b_unit_label = QLabel("")
-        self.input_b_unit_label.setStyleSheet("color: #666; font-style: italic;")
-        self.input_b_combo.currentTextChanged.connect(self._update_unit_labels)
-        input_b_layout.addWidget(self.input_b_combo)
-        input_b_layout.addWidget(self.input_b_unit_label)
-        layout.addLayout(input_b_layout)
+        self.input_combos = {}
+        self.input_unit_labels = {}
         
-        # Expression
-        expr_layout = QVBoxLayout()
-        expr_label = QLabel("Expression (use A and B as variables):")
-        expr_layout.addWidget(expr_label)
+        for i, label in enumerate(self.INPUT_LABELS):
+            row = i
+            # Label
+            lbl = QLabel(f"Input {label}:" if i == 0 else f"Input {label} (optional):")
+            inputs_layout.addWidget(lbl, row, 0)
+            
+            # Combo box with channels sorted by unit
+            combo = QComboBox()
+            if i > 0:  # A is required, others optional
+                combo.addItem("(None)")
+            for display_text, channel_name in self.sorted_channel_items:
+                combo.addItem(display_text, channel_name)
+            combo.currentTextChanged.connect(self._update_unit_labels)
+            inputs_layout.addWidget(combo, row, 1)
+            self.input_combos[label] = combo
+            
+            # Unit label
+            unit_lbl = QLabel("")
+            unit_lbl.setStyleSheet("color: #666; font-style: italic;")
+            unit_lbl.setMinimumWidth(80)
+            inputs_layout.addWidget(unit_lbl, row, 2)
+            self.input_unit_labels[label] = unit_lbl
+        
+        layout.addWidget(inputs_group)
+        
+        # Expression section
+        expr_group = QGroupBox("Expression")
+        expr_layout = QVBoxLayout(expr_group)
+        
         self.expr_input = QLineEdit()
-        self.expr_input.setPlaceholderText("e.g., (A / 0.45) * 14.7")
+        self.expr_input.setPlaceholderText("e.g., (A / 0.45) * 14.7  or  if_else(A > B, A, B)")
         self.expr_input.textChanged.connect(self._validate_expression)
         expr_layout.addWidget(self.expr_input)
+        
+        # Help text (shared constant)
+        func_help = QLabel(EXPRESSION_HELP_TEXT)
+        func_help.setStyleSheet("color: #555; font-size: 8pt;")
+        func_help.setWordWrap(True)
+        expr_layout.addWidget(func_help)
         
         # Validation status
         self.validation_label = QLabel("")
         self.validation_label.setStyleSheet("color: #666; font-size: 9pt;")
         expr_layout.addWidget(self.validation_label)
         
-        layout.addLayout(expr_layout)
+        layout.addWidget(expr_group)
         
         # Unit with autocomplete
         unit_layout = QHBoxLayout()
-        unit_layout.addWidget(QLabel("Unit:"))
+        unit_layout.addWidget(QLabel("Output Unit:"))
         self.unit_input = QLineEdit()
         self.unit_input.setPlaceholderText("e.g., AFR")
         
@@ -539,37 +681,118 @@ class MathChannelDialog(QDialog):
             self.expr_input.setText(edit_data.get('expression', ''))
             self.unit_input.setText(edit_data.get('unit', ''))
             
-            input_a = edit_data.get('input_a', '')
-            if input_a in self.available_channels:
-                self.input_a_combo.setCurrentText(input_a)
-            
-            input_b = edit_data.get('input_b', '')
-            if input_b and input_b in self.available_channels:
-                self.input_b_combo.setCurrentText(input_b)
+            # Handle both old format (input_a, input_b) and new format (inputs dict)
+            if 'inputs' in edit_data:
+                inputs = edit_data['inputs']
+                for label in self.INPUT_LABELS:
+                    if label in inputs and inputs[label]:
+                        ch = inputs[label]
+                        if ch in self.available_channels:
+                            # Find the combo index by itemData (channel name), not display text
+                            combo = self.input_combos[label]
+                            for i in range(combo.count()):
+                                if combo.itemData(i) == ch:
+                                    combo.setCurrentIndex(i)
+                                    break
+            else:
+                # Legacy format
+                input_a = edit_data.get('input_a', '')
+                if input_a in self.available_channels:
+                    combo = self.input_combos['A']
+                    for i in range(combo.count()):
+                        if combo.itemData(i) == input_a:
+                            combo.setCurrentIndex(i)
+                            break
+                
+                input_b = edit_data.get('input_b', '')
+                if input_b and input_b in self.available_channels:
+                    combo = self.input_combos['B']
+                    for i in range(combo.count()):
+                        if combo.itemData(i) == input_b:
+                            combo.setCurrentIndex(i)
+                            break
         
         # Initialize unit labels
         self._update_unit_labels()
     
-    def _update_unit_labels(self):
-        """Update the unit labels for inputs A and B."""
-        input_a = self.input_a_combo.currentText()
-        if input_a and input_a in self.channel_units:
-            self.input_a_unit_label.setText(f"[{self.channel_units[input_a]}]")
-        else:
-            self.input_a_unit_label.setText("")
+    def _sort_channels_by_unit(self, channels: List[str]) -> List[tuple]:
+        """Sort channels by unit then alphabetically, return list of (display_text, channel_name).
         
-        input_b = self.input_b_combo.currentText()
-        if input_b and input_b != "(None)" and input_b in self.channel_units:
-            self.input_b_unit_label.setText(f"[{self.channel_units[input_b]}]")
-        else:
-            self.input_b_unit_label.setText("")
+        Matches the sorting used in channel controls sidebar: by unit.lower(), then display_name.lower()
+        """
+        # Build list of (channel_name, display_name, unit)
+        channel_info = []
+        for ch in channels:
+            unit = self.channel_units.get(ch, '')
+            display_name = ch.replace('_', ' ').title()
+            channel_info.append((ch, display_name, unit))
+        
+        # Sort by unit.lower(), then display_name.lower() (matching channel controls)
+        channel_info.sort(key=lambda x: (x[2].lower(), x[1].lower()))
+        
+        # Build result with display text including unit
+        result = []
+        for ch, display_name, unit in channel_info:
+            display = f"{ch} ({unit})" if unit else ch
+            result.append((display, ch))
+        return result
+    
+    def _get_channel_from_combo(self, combo: QComboBox) -> str:
+        """Get the actual channel name from a combo box (handles display text with unit)."""
+        data = combo.currentData()
+        if data is not None:
+            return data
+        # Fallback for (None) or legacy
+        text = combo.currentText()
+        return text if text != "(None)" else ""
+    
+    def _update_unit_labels(self):
+        """Update the unit labels for all inputs."""
+        for label in self.INPUT_LABELS:
+            combo = self.input_combos[label]
+            unit_lbl = self.input_unit_labels[label]
+            
+            channel = self._get_channel_from_combo(combo)
+            if channel and channel in self.channel_units:
+                unit_lbl.setText(f"[{self.channel_units[channel]}]")
+            else:
+                unit_lbl.setText("")
+        
+        # Re-validate expression when inputs change
+        self._validate_expression()
     
     def _on_name_changed(self):
         """Re-validate when name changes."""
         self._validate_expression()
     
+    def _get_eval_context(self, test_values: Dict[str, float] = None):
+        """Get the evaluation context with all available functions."""
+        import numpy as np
+        
+        if test_values is None:
+            test_values = {label: 1.0 for label in self.INPUT_LABELS}
+        
+        # Build context with functions and variables
+        context = {}
+        context.update(_get_math_functions())
+        context.update(_get_statistical_functions())
+        
+        # Add if_else for conditionals (works element-wise on arrays)
+        def if_else(condition, true_val, false_val):
+            """Conditional expression: returns true_val where condition is True, else false_val."""
+            return np.where(condition, true_val, false_val)
+        
+        context['if_else'] = if_else
+        
+        # Add test values
+        context.update(test_values)
+        
+        return context
+    
     def _validate_expression(self):
         """Validate the expression and update UI."""
+        import numpy as np
+        
         expr = self.expr_input.text().strip()
         name = self.name_input.text().strip()
         
@@ -578,16 +801,42 @@ class MathChannelDialog(QDialog):
             self.create_btn.setEnabled(False)
             return
         
-        # Try to evaluate with dummy values
+        # Check that Input A is selected
+        input_a = self._get_channel_from_combo(self.input_combos['A'])
+        if not input_a:
+            self.validation_label.setText("✗ Input A is required")
+            self.validation_label.setStyleSheet("color: #D32F2F; font-size: 9pt;")
+            self.create_btn.setEnabled(False)
+            return
+        
+        # Build test values - use arrays to test statistical functions
+        test_values = {}
+        used_inputs = []
+        for label in self.INPUT_LABELS:
+            channel = self._get_channel_from_combo(self.input_combos[label])
+            if channel:
+                test_values[label] = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+                used_inputs.append(label)
+            else:
+                test_values[label] = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+        
+        # Try to evaluate with test values
         try:
-            A = 1.0
-            B = 1.0
-            result = eval(expr, {"__builtins__": {}}, {"A": A, "B": B})
+            context = self._get_eval_context(test_values)
+            result = eval(expr, {"__builtins__": {}}, context)
             
-            if not isinstance(result, (int, float)):
-                raise ValueError("Expression must return a number")
+            # Handle both scalar and array results
+            if isinstance(result, np.ndarray):
+                if not np.issubdtype(result.dtype, np.number):
+                    raise ValueError("Expression must return numeric values")
+                result_str = f"[{result[0]:.2f}, {result[1]:.2f}, ...]" if len(result) > 2 else str(result)
+            elif isinstance(result, (int, float)):
+                result_str = f"{result:.4f}"
+            else:
+                raise ValueError("Expression must return a number or array")
             
-            self.validation_label.setText(f"✓ Valid expression (test: A=1, B=1 → {result:.4f})")
+            inputs_str = ", ".join([f"{l}=[1-5]" for l in used_inputs])
+            self.validation_label.setText(f"✓ Valid ({inputs_str} → {result_str})")
             self.validation_label.setStyleSheet("color: #388E3C; font-size: 9pt;")
             self.create_btn.setEnabled(bool(name))
             
@@ -600,13 +849,375 @@ class MathChannelDialog(QDialog):
         """Emit signal to create the channel."""
         name = self.name_input.text().strip()
         expr = self.expr_input.text().strip()
-        input_a = self.input_a_combo.currentText()
-        input_b = self.input_b_combo.currentText()
-        if input_b == "(None)":
-            input_b = ""
+        
+        # Collect all inputs
+        inputs = {}
+        for label in self.INPUT_LABELS:
+            channel = self._get_channel_from_combo(self.input_combos[label])
+            inputs[label] = channel
+        
         unit = self.unit_input.text().strip() or "unit"
         
-        self.channel_created.emit(name, expr, input_a, input_b, unit)
+        # Emit as JSON string for inputs dict
+        import json
+        inputs_json = json.dumps(inputs)
+        
+        self.channel_created.emit(name, expr, inputs_json, unit)
+        self.accept()
+
+
+class FilterDialog(QDialog):
+    """Dialog for creating or editing a data filter.
+    
+    Filters use boolean expressions to show/hide data points based on channel values.
+    Reuses the same expression evaluation infrastructure as MathChannelDialog.
+    """
+    
+    # Signal: (name, expression, inputs_dict_json, mode, buffer_seconds)
+    filter_created = pyqtSignal(str, str, str, str, float)
+    
+    # Input labels (same as MathChannelDialog)
+    INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
+    
+    # Buffer options in seconds
+    BUFFER_OPTIONS = [
+        (0.1, "±0.1s"),
+        (0.5, "±0.5s"),
+        (1.0, "±1s"),
+        (2.0, "±2s"),
+        (5.0, "±5s"),
+        (10.0, "±10s"),
+        (30.0, "±30s"),
+        (60.0, "±1min"),
+        (120.0, "±2min"),
+        (300.0, "±5min"),
+        (600.0, "±10min"),
+    ]
+    
+    def __init__(self, available_channels: List[str], channel_units: Dict[str, str] = None,
+                 edit_data: Optional[Dict] = None, parent=None):
+        super().__init__(parent)
+        
+        self.channel_units = channel_units or {}
+        self.available_channels = available_channels
+        self.sorted_channel_items = self._sort_channels_by_unit(available_channels)
+        self.edit_mode = edit_data is not None
+        self.original_name = edit_data.get('name', '') if edit_data else ''
+        
+        self.setWindowTitle("Edit Filter" if self.edit_mode else "Create Filter")
+        self.setMinimumWidth(550)
+        
+        layout = QVBoxLayout(self)
+        
+        # Filter name
+        name_layout = QHBoxLayout()
+        name_layout.addWidget(QLabel("Filter Name:"))
+        self.name_input = QLineEdit()
+        self.name_input.setPlaceholderText("e.g., High_RPM_Filter")
+        self.name_input.textChanged.connect(self._on_name_changed)
+        name_layout.addWidget(self.name_input)
+        layout.addLayout(name_layout)
+        
+        # Input channels section
+        inputs_group = QGroupBox("Input Channels")
+        inputs_layout = QGridLayout(inputs_group)
+        
+        self.input_combos = {}
+        self.input_unit_labels = {}
+        
+        for i, label in enumerate(self.INPUT_LABELS):
+            row = i
+            lbl = QLabel(f"Input {label}:" if i == 0 else f"Input {label} (optional):")
+            inputs_layout.addWidget(lbl, row, 0)
+            
+            combo = QComboBox()
+            if i > 0:
+                combo.addItem("(None)")
+            for display_text, channel_name in self.sorted_channel_items:
+                combo.addItem(display_text, channel_name)
+            combo.currentTextChanged.connect(self._update_unit_labels)
+            inputs_layout.addWidget(combo, row, 1)
+            self.input_combos[label] = combo
+            
+            unit_lbl = QLabel("")
+            unit_lbl.setStyleSheet("color: #666; font-style: italic;")
+            unit_lbl.setMinimumWidth(80)
+            inputs_layout.addWidget(unit_lbl, row, 2)
+            self.input_unit_labels[label] = unit_lbl
+        
+        layout.addWidget(inputs_group)
+        
+        # Expression section
+        expr_group = QGroupBox("Boolean Expression")
+        expr_layout = QVBoxLayout(expr_group)
+        
+        self.expr_input = QLineEdit()
+        self.expr_input.setPlaceholderText("e.g., A > 3000  or  (A > 2000) & (B < 100)")
+        self.expr_input.textChanged.connect(self._validate_expression)
+        expr_layout.addWidget(self.expr_input)
+        
+        # Help text (shared constant)
+        func_help = QLabel(EXPRESSION_HELP_TEXT)
+        func_help.setStyleSheet("color: #555; font-size: 8pt;")
+        func_help.setWordWrap(True)
+        expr_layout.addWidget(func_help)
+        
+        self.validation_label = QLabel("")
+        self.validation_label.setStyleSheet("color: #666; font-size: 9pt;")
+        expr_layout.addWidget(self.validation_label)
+        
+        layout.addWidget(expr_group)
+        
+        # Filter mode section - horizontal toggle
+        mode_group = QGroupBox("Filter Mode")
+        mode_layout = QHBoxLayout(mode_group)
+        
+        self.mode_show_btn = QPushButton("👁 Show matching data")
+        self.mode_hide_btn = QPushButton("🚫 Hide matching data")
+        
+        self.mode_show_btn.setCheckable(True)
+        self.mode_hide_btn.setCheckable(True)
+        self.mode_show_btn.setChecked(True)
+        
+        # Style for toggle buttons
+        toggle_style = """
+            QPushButton { padding: 8px 16px; border: 1px solid #ccc; }
+            QPushButton:checked { background-color: #1976D2; color: white; border: 1px solid #1565C0; }
+            QPushButton:!checked { background-color: #f0f0f0; color: #333; }
+        """
+        self.mode_show_btn.setStyleSheet(toggle_style)
+        self.mode_hide_btn.setStyleSheet(toggle_style)
+        
+        # Make them mutually exclusive
+        self.mode_show_btn.clicked.connect(lambda: self._set_filter_mode('show'))
+        self.mode_hide_btn.clicked.connect(lambda: self._set_filter_mode('hide'))
+        
+        mode_layout.addWidget(self.mode_show_btn)
+        mode_layout.addWidget(self.mode_hide_btn)
+        
+        layout.addWidget(mode_group)
+        
+        # Time buffer section
+        buffer_group = QGroupBox("Time Buffer")
+        buffer_layout = QHBoxLayout(buffer_group)
+        
+        buffer_layout.addWidget(QLabel("Buffer:"))
+        self.buffer_combo = QComboBox()
+        for seconds, label in self.BUFFER_OPTIONS:
+            self.buffer_combo.addItem(label, seconds)
+        self.buffer_combo.setCurrentIndex(0)  # Default to ±0.1s
+        buffer_layout.addWidget(self.buffer_combo)
+        buffer_layout.addStretch()
+        
+        buffer_help = QLabel("Data within buffer of matching points will be shown/hidden")
+        buffer_help.setStyleSheet("color: #666; font-size: 8pt;")
+        buffer_layout.addWidget(buffer_help)
+        
+        layout.addWidget(buffer_group)
+        
+        # Buttons
+        btn_layout = QHBoxLayout()
+        btn_text = "Save" if self.edit_mode else "Create"
+        self.create_btn = QPushButton(btn_text)
+        self.create_btn.setStyleSheet("background-color: #1976D2; color: white; font-weight: bold;")
+        self.create_btn.setEnabled(False)
+        self.create_btn.clicked.connect(self._create_filter)
+        
+        cancel_btn = QPushButton("Cancel")
+        cancel_btn.clicked.connect(self.reject)
+        
+        btn_layout.addStretch()
+        btn_layout.addWidget(cancel_btn)
+        btn_layout.addWidget(self.create_btn)
+        layout.addLayout(btn_layout)
+        
+        # Pre-fill if editing
+        if edit_data:
+            self.name_input.setText(edit_data.get('name', ''))
+            self.expr_input.setText(edit_data.get('expression', ''))
+            
+            mode = edit_data.get('mode', 'show')
+            self._set_filter_mode(mode)
+            
+            buffer_seconds = edit_data.get('buffer_seconds', 2.0)
+            for i, (seconds, _) in enumerate(self.BUFFER_OPTIONS):
+                if abs(seconds - buffer_seconds) < 0.01:
+                    self.buffer_combo.setCurrentIndex(i)
+                    break
+            
+            if 'inputs' in edit_data:
+                inputs = edit_data['inputs']
+                for label in self.INPUT_LABELS:
+                    if label in inputs and inputs[label]:
+                        ch = inputs[label]
+                        if ch in self.available_channels:
+                            # Find the combo index by itemData (channel name), not display text
+                            combo = self.input_combos[label]
+                            for i in range(combo.count()):
+                                if combo.itemData(i) == ch:
+                                    combo.setCurrentIndex(i)
+                                    break
+        
+        self._update_unit_labels()
+    
+    def _sort_channels_by_unit(self, channels: List[str]) -> List[tuple]:
+        """Sort channels by unit then alphabetically, return list of (display_text, channel_name).
+        
+        Matches the sorting used in channel controls sidebar: by unit.lower(), then display_name.lower()
+        """
+        # Build list of (channel_name, display_name, unit)
+        channel_info = []
+        for ch in channels:
+            unit = self.channel_units.get(ch, '')
+            display_name = ch.replace('_', ' ').title()
+            channel_info.append((ch, display_name, unit))
+        
+        # Sort by unit.lower(), then display_name.lower() (matching channel controls)
+        channel_info.sort(key=lambda x: (x[2].lower(), x[1].lower()))
+        
+        # Build result with display text including unit
+        result = []
+        for ch, display_name, unit in channel_info:
+            display = f"{ch} ({unit})" if unit else ch
+            result.append((display, ch))
+        return result
+    
+    def _get_channel_from_combo(self, combo: QComboBox) -> str:
+        """Get the actual channel name from a combo box (handles display text with unit)."""
+        data = combo.currentData()
+        if data is not None:
+            return data
+        text = combo.currentText()
+        return text if text != "(None)" else ""
+    
+    def _update_unit_labels(self):
+        """Update the unit labels for all inputs."""
+        for label in self.INPUT_LABELS:
+            combo = self.input_combos[label]
+            unit_lbl = self.input_unit_labels[label]
+            
+            channel = self._get_channel_from_combo(combo)
+            if channel and channel in self.channel_units:
+                unit_lbl.setText(f"[{self.channel_units[channel]}]")
+            else:
+                unit_lbl.setText("")
+        
+        self._validate_expression()
+    
+    def _on_name_changed(self):
+        """Re-validate when name changes."""
+        self._validate_expression()
+    
+    def _get_eval_context(self, test_values: Dict[str, float] = None):
+        """Get the evaluation context with all available functions."""
+        import numpy as np
+        
+        if test_values is None:
+            test_values = {label: np.array([1.0]) for label in self.INPUT_LABELS}
+        
+        context = {}
+        context.update(_get_math_functions())
+        context.update(_get_statistical_functions())
+        
+        def if_else(condition, true_val, false_val):
+            return np.where(condition, true_val, false_val)
+        
+        context['if_else'] = if_else
+        context.update(test_values)
+        
+        return context
+    
+    def _validate_expression(self):
+        """Validate the boolean expression and update UI."""
+        import numpy as np
+        
+        expr = self.expr_input.text().strip()
+        name = self.name_input.text().strip()
+        
+        if not expr:
+            self.validation_label.setText("")
+            self.create_btn.setEnabled(False)
+            return
+        
+        input_a = self._get_channel_from_combo(self.input_combos['A'])
+        if not input_a:
+            self.validation_label.setText("✗ Input A is required")
+            self.validation_label.setStyleSheet("color: #D32F2F; font-size: 9pt;")
+            self.create_btn.setEnabled(False)
+            return
+        
+        # Build test values
+        test_values = {}
+        used_inputs = []
+        for label in self.INPUT_LABELS:
+            channel = self._get_channel_from_combo(self.input_combos[label])
+            if channel:
+                test_values[label] = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+                used_inputs.append(label)
+            else:
+                test_values[label] = np.array([0.0, 0.0, 0.0, 0.0, 0.0])
+        
+        try:
+            context = self._get_eval_context(test_values)
+            result = eval(expr, {"__builtins__": {}}, context)
+            
+            # Check if result is boolean-like
+            if isinstance(result, np.ndarray):
+                if result.dtype != np.bool_ and not np.issubdtype(result.dtype, np.number):
+                    raise ValueError("Expression must return boolean values")
+                # Convert to bool for display
+                bool_result = result.astype(bool)
+                true_count = np.sum(bool_result)
+                result_str = f"{true_count}/{len(bool_result)} True"
+            elif isinstance(result, (bool, np.bool_)):
+                result_str = str(result)
+            else:
+                raise ValueError("Expression must return boolean values")
+            
+            inputs_str = ", ".join([f"{l}=[1-5]" for l in used_inputs])
+            self.validation_label.setText(f"✓ Valid ({inputs_str} → {result_str})")
+            self.validation_label.setStyleSheet("color: #388E3C; font-size: 9pt;")
+            self.create_btn.setEnabled(bool(name))
+            
+        except Exception as e:
+            self.validation_label.setText(f"✗ Invalid: {str(e)}")
+            self.validation_label.setStyleSheet("color: #D32F2F; font-size: 9pt;")
+            self.create_btn.setEnabled(False)
+    
+    def _set_filter_mode(self, mode: str):
+        """Set the filter mode ('show' or 'hide')."""
+        if mode == 'show':
+            self.mode_show_btn.setChecked(True)
+            self.mode_hide_btn.setChecked(False)
+        else:
+            self.mode_show_btn.setChecked(False)
+            self.mode_hide_btn.setChecked(True)
+    
+    def _create_filter(self):
+        """Emit signal to create the filter."""
+        import json
+        from PyQt6.QtWidgets import QMessageBox
+        
+        name = self.name_input.text().strip()
+        expr = self.expr_input.text().strip()
+        
+        # Validate name is provided
+        if not name:
+            QMessageBox.warning(self, "Filter Name Required", "Filters must have a name.")
+            self.name_input.setFocus()
+            return
+        
+        inputs = {}
+        for label in self.INPUT_LABELS:
+            channel = self._get_channel_from_combo(self.input_combos[label])
+            inputs[label] = channel
+        
+        mode = "show" if self.mode_show_btn.isChecked() else "hide"
+        buffer_seconds = self.buffer_combo.currentData()
+        
+        inputs_json = json.dumps(inputs)
+        
+        self.filter_created.emit(name, expr, inputs_json, mode, buffer_seconds)
         self.accept()
 
 
@@ -661,7 +1272,7 @@ class HomeWidget(QWidget):
         
         # Open new file button
         btn_style = "background-color: #1976D2; color: white; font-weight: bold; font-size: 14pt; padding: 15px 30px; border-radius: 5px;"
-        self.open_btn = QPushButton("📂 Open CSV File(s)")
+        self.open_btn = QPushButton("📂 Import CSV File(s)")
         self.open_btn.setStyleSheet(btn_style)
         self.open_btn.clicked.connect(self.open_new_requested.emit)
         layout.addWidget(self.open_btn, alignment=Qt.AlignmentFlag.AlignCenter)
@@ -682,21 +1293,27 @@ class HomeWidget(QWidget):
         # Buttons row
         btn_row = QHBoxLayout()
         
-        # Open selected button
-        self.open_selected_btn = QPushButton("Open Selected")
-        self.open_selected_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold;")
+        btn_row.addStretch()
+        
+        # Open selected button - bigger and centered
+        self.open_selected_btn = QPushButton("📂 Open Selected")
+        self.open_selected_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold; font-size: 14pt; padding: 12px 40px; border-radius: 5px;")
         self.open_selected_btn.clicked.connect(self._open_selected)
         btn_row.addWidget(self.open_selected_btn)
         
         btn_row.addStretch()
         
-        # Clear button
+        layout.addLayout(btn_row)
+        
+        # Clear button row (separate, smaller)
+        clear_row = QHBoxLayout()
+        clear_row.addStretch()
         clear_btn = QPushButton("Clear History")
         clear_btn.setStyleSheet("background-color: #616161; color: white;")
         clear_btn.clicked.connect(self._clear_history)
-        btn_row.addWidget(clear_btn)
-        
-        layout.addLayout(btn_row)
+        clear_row.addWidget(clear_btn)
+        clear_row.addStretch()
+        layout.addLayout(clear_row)
         
         layout.addStretch()
     
@@ -867,8 +1484,13 @@ class OBD2MainWindow(QMainWindow):
         self.imports: List[ImportData] = []
         self.channel_controls: Dict[str, MultiImportChannelControl] = {}
         
-        # Math channel definitions: {name: {expression, input_a, input_b, unit}}
+        # Math channel definitions: {name: {expression, inputs, unit}}
         self.math_channels: Dict[str, Dict] = {}
+        
+        # Filter definitions: ordered list of (name, definition_dict)
+        # Order determines precedence: last in list = highest precedence (applied last)
+        self.filter_order: List[str] = []  # Filter names in order
+        self.filters: Dict[str, Dict] = {}  # {name: {expression, inputs, mode, buffer_seconds, enabled}}
         
         # Legacy single-import references (for compatibility)
         self.channels_data: Dict = {}
@@ -962,6 +1584,7 @@ class OBD2MainWindow(QMainWindow):
         
         # Graph height buttons
         height_layout = QHBoxLayout()
+        # Row 1: Taller, Shorter, Math Channel, Create Filter
         self.btn_taller = QPushButton("📈 Taller")
         self.btn_shorter = QPushButton("📉 Shorter")
         btn_style_blue = "background-color: #0288D1; color: white; font-weight: bold;"
@@ -971,12 +1594,30 @@ class OBD2MainWindow(QMainWindow):
         self.btn_shorter.clicked.connect(self._make_plots_shorter)
         height_layout.addWidget(self.btn_taller)
         height_layout.addWidget(self.btn_shorter)
+        
+        self.btn_create_math = QPushButton("➕ Math Channel")
+        self.btn_create_math.setStyleSheet("background-color: #7B1FA2; color: white; font-weight: bold;")
+        self.btn_create_math.clicked.connect(self._show_math_channel_dialog)
+        height_layout.addWidget(self.btn_create_math)
+        
+        self.btn_create_filter = QPushButton("➕ Create Filter")
+        self.btn_create_filter.setStyleSheet("background-color: #FF746C; color: white; font-weight: bold;")
+        self.btn_create_filter.clicked.connect(self._show_filter_dialog)
+        height_layout.addWidget(self.btn_create_filter)
         channel_layout.addLayout(height_layout)
         
-        # Spacer
-        channel_layout.addSpacing(10)
+        # Filters section (above channel list)
+        self.filters_widget = QWidget()
+        self.filters_layout = QVBoxLayout(self.filters_widget)
+        self.filters_layout.setContentsMargins(0, 0, 0, 0)
+        self.filters_layout.setSpacing(2)
+        self.filters_label = QLabel("Filters")
+        self.filters_label.setStyleSheet("font-weight: bold; color: #0288D1;")
+        self.filters_layout.addWidget(self.filters_label)
+        self.filters_widget.setVisible(False)  # Hidden until filters are created
+        channel_layout.addWidget(self.filters_widget)
         
-        # Show/Hide all buttons
+        # Show/Hide all buttons (under Filters section)
         btn_layout = QHBoxLayout()
         self.btn_show_all = QPushButton("Show All")
         self.btn_hide_all = QPushButton("Hide All")
@@ -986,12 +1627,6 @@ class OBD2MainWindow(QMainWindow):
         btn_layout.addWidget(self.btn_show_all)
         btn_layout.addWidget(self.btn_hide_all)
         channel_layout.addLayout(btn_layout)
-        
-        # Create Math Channel button
-        self.btn_create_math = QPushButton("➕ Create Math Channel")
-        self.btn_create_math.setStyleSheet("background-color: #7B1FA2; color: white; font-weight: bold;")
-        self.btn_create_math.clicked.connect(self._show_math_channel_dialog)
-        channel_layout.addWidget(self.btn_create_math)
         
         # Channel list scroll area
         self.channel_scroll = QScrollArea()
@@ -1195,16 +1830,25 @@ class OBD2MainWindow(QMainWindow):
                 self._load_multiple_files(file_paths)
     
     def _load_multiple_files(self, file_paths: List[str]):
-        """Load multiple CSV files as separate imports."""
+        """Load multiple CSV files as separate imports.
+        
+        Files are loaded sequentially to avoid race conditions with the loading dialog.
+        """
         if not file_paths:
             return
         
-        # Load first file as primary import
-        self._load_file(file_paths[0], is_additional=False)
+        # Queue files for sequential loading
+        self._pending_files_queue = list(file_paths)
+        self._load_next_queued_file()
+    
+    def _load_next_queued_file(self):
+        """Load the next file from the queue."""
+        if not hasattr(self, '_pending_files_queue') or not self._pending_files_queue:
+            return
         
-        # Load remaining files as additional imports
-        for path in file_paths[1:]:
-            self._load_file(path, is_additional=True)
+        file_path = self._pending_files_queue.pop(0)
+        is_additional = len(self.imports) > 0  # Additional if we already have imports
+        self._load_file(file_path, is_additional=is_additional)
     
     def _open_folder_dialog(self):
         """Open folder dialog to select directory with CSV files."""
@@ -1232,71 +1876,91 @@ class OBD2MainWindow(QMainWindow):
                 return
         
         # Show loading dialog
-        loading = LoadingDialog(f"Loading {Path(file_path).name}...", self)
-        loading.show()
-        QApplication.processEvents()
+        self._loading_dialog = LoadingDialog(f"Loading {Path(file_path).name}...", self)
+        self._loading_dialog.show()
         
-        try:
-            self.statusbar.showMessage(f"Loading {file_path}...")
-            QApplication.processEvents()
-            
-            loader = OBDDataLoader(str(Path(file_path).parent))
-            channels_data, units = loader.load_single_file(file_path)
-            
-            # Normalize time to start at 0
-            # Find the minimum time across all channels
-            min_time = float('inf')
-            for df in channels_data.values():
-                if 'SECONDS' in df.columns and len(df) > 0:
-                    channel_min = df['SECONDS'].min()
-                    if channel_min < min_time:
-                        min_time = channel_min
-            
-            # Subtract min_time from all SECONDS values
-            if min_time != float('inf') and min_time != 0:
-                for ch, df in channels_data.items():
-                    if 'SECONDS' in df.columns:
-                        channels_data[ch] = df.copy()
-                        channels_data[ch]['SECONDS'] = df['SECONDS'] - min_time
-            
-            # Create display names
-            display_names = {
-                ch: ch.replace('_', ' ').title() 
-                for ch in channels_data.keys()
-            }
-            
-            # Assign color
-            color_index = len(self.imports) if is_additional else 0
-            color = IMPORT_COLORS[color_index % len(IMPORT_COLORS)]
-            
-            # Create ImportData
-            import_data = ImportData(
-                file_path=file_path,
-                channels_data=channels_data,
-                units=units,
-                display_names=display_names,
-                color=color
-            )
-            
-            if is_additional:
-                self.imports.append(import_data)
-                # Preserve visibility when adding additional imports
-                self._process_imports(preserve_visibility=True)
-            else:
-                # Clear existing imports and start fresh
-                self.imports = [import_data]
-                self._process_imports(preserve_visibility=False)
-            
-            self._add_to_recent(file_path)
-            self._show_viz()
-            
-            loading.close()
-            
-        except Exception as e:
-            loading.close()
-            logger.error(f"Error loading file: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to load file:\n{e}")
-            self.statusbar.showMessage("Error loading file")
+        self.statusbar.showMessage(f"Loading {file_path}...")
+        
+        # Store state for the callback
+        self._pending_file_path = file_path
+        self._pending_is_additional = is_additional
+        
+        # Start background thread for file loading
+        self._loader_thread = FileLoaderThread(file_path, self)
+        self._loader_thread.finished.connect(self._on_file_loaded)
+        self._loader_thread.error.connect(self._on_file_load_error)
+        self._loader_thread.start()
+    
+    def _on_file_loaded(self, channels_data: dict, units: dict):
+        """Handle successful file load from background thread."""
+        file_path = self._pending_file_path
+        is_additional = self._pending_is_additional
+        
+        # Normalize time to start at 0
+        # Find the minimum time across all channels
+        min_time = float('inf')
+        for df in channels_data.values():
+            if 'SECONDS' in df.columns and len(df) > 0:
+                channel_min = df['SECONDS'].min()
+                if channel_min < min_time:
+                    min_time = channel_min
+        
+        # Subtract min_time from all SECONDS values
+        if min_time != float('inf') and min_time != 0:
+            for ch, df in channels_data.items():
+                if 'SECONDS' in df.columns:
+                    channels_data[ch] = df.copy()
+                    channels_data[ch]['SECONDS'] = df['SECONDS'] - min_time
+        
+        # Create display names
+        display_names = {
+            ch: ch.replace('_', ' ').title() 
+            for ch in channels_data.keys()
+        }
+        
+        # Assign color
+        color_index = len(self.imports) if is_additional else 0
+        color = IMPORT_COLORS[color_index % len(IMPORT_COLORS)]
+        
+        # Create ImportData
+        import_data = ImportData(
+            file_path=file_path,
+            channels_data=channels_data,
+            units=units,
+            display_names=display_names,
+            color=color
+        )
+        
+        if is_additional:
+            self.imports.append(import_data)
+            # Preserve visibility when adding additional imports
+            self._process_imports(preserve_visibility=True)
+        else:
+            # Clear existing imports and start fresh
+            self.imports = [import_data]
+            self._process_imports(preserve_visibility=False)
+        
+        self._add_to_recent(file_path)
+        self._show_viz()
+        
+        self._loading_dialog.close()
+        self._loading_dialog = None
+        self._loader_thread = None
+        
+        # Load next file from queue if any
+        self._load_next_queued_file()
+    
+    def _on_file_load_error(self, error_msg: str):
+        """Handle file load error from background thread."""
+        self._loading_dialog.close()
+        self._loading_dialog = None
+        self._loader_thread = None
+        
+        QMessageBox.critical(self, "Error", f"Failed to load file:\n{error_msg}")
+        self.statusbar.showMessage("Error loading file")
+        
+        # Continue loading next file from queue even if this one failed
+        self._load_next_queued_file()
     
     def _add_import_dialog(self):
         """Open dialog to add an additional import."""
@@ -1558,7 +2222,7 @@ class OBD2MainWindow(QMainWindow):
             edit_data = {'name': edit_channel, **self.math_channels[edit_channel]}
         
         dialog = MathChannelDialog(list(all_channels), list(all_units), channel_units, edit_data, self)
-        dialog.channel_created.connect(lambda n, e, a, b, u: self._create_math_channel(n, e, a, b, u, edit_channel))
+        dialog.channel_created.connect(lambda n, e, inputs_json, u: self._create_math_channel(n, e, inputs_json, u, edit_channel))
         dialog.exec()
     
     def _edit_math_channel(self, channel_name: str):
@@ -1573,11 +2237,22 @@ class OBD2MainWindow(QMainWindow):
         if not self.math_channels:
             return
         
+        INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
+        
         for name, definition in self.math_channels.items():
             expression = definition['expression']
-            input_a = definition['input_a']
-            input_b = definition['input_b']
             unit = definition['unit']
+            
+            # Handle both old format (input_a, input_b) and new format (inputs dict)
+            if 'inputs' in definition:
+                inputs = definition['inputs']
+            else:
+                # Legacy format
+                inputs = {
+                    'A': definition.get('input_a', ''),
+                    'B': definition.get('input_b', ''),
+                    'C': '', 'D': '', 'E': ''
+                }
             
             for imp in self.imports:
                 # Skip if this import already has this math channel
@@ -1585,43 +2260,63 @@ class OBD2MainWindow(QMainWindow):
                     continue
                 
                 # Skip if input A is not available
-                if input_a not in imp.channels_data:
+                input_a = inputs.get('A', '')
+                if not input_a or input_a not in imp.channels_data:
                     logger.debug(f"Skipping math channel '{name}' for {imp.filename}: input A '{input_a}' not found")
                     continue
                 
+                # Get time points from input A
                 df_a = imp.channels_data[input_a]
                 times = df_a['SECONDS'].values
-                values_a = df_a['VALUE'].values
                 
-                if input_b and input_b in imp.channels_data:
-                    # Align B values to A's time points
-                    df_b = imp.channels_data[input_b]
-                    times_b = df_b['SECONDS'].values
-                    values_b_raw = df_b['VALUE'].values
-                    
-                    values_b = np.zeros_like(values_a)
-                    for i, t in enumerate(times):
-                        idx = np.searchsorted(times_b, t)
-                        if idx == 0:
-                            values_b[i] = values_b_raw[0]
-                        elif idx >= len(times_b):
-                            values_b[i] = values_b_raw[-1]
-                        else:
-                            diff_before = t - times_b[idx - 1]
-                            diff_after = times_b[idx] - t
-                            if diff_after <= diff_before:
-                                values_b[i] = values_b_raw[idx]
+                # Build aligned values for all inputs
+                aligned_values = {}
+                for label in INPUT_LABELS:
+                    input_ch = inputs.get(label, '')
+                    if input_ch and input_ch in imp.channels_data:
+                        df = imp.channels_data[input_ch]
+                        times_ch = df['SECONDS'].values
+                        values_raw = df['VALUE'].values
+                        
+                        # Align to A's time points
+                        aligned = np.zeros(len(times))
+                        for i, t in enumerate(times):
+                            idx = np.searchsorted(times_ch, t)
+                            if idx == 0:
+                                aligned[i] = values_raw[0]
+                            elif idx >= len(times_ch):
+                                aligned[i] = values_raw[-1]
                             else:
-                                values_b[i] = values_b_raw[idx - 1]
-                else:
-                    values_b = np.zeros_like(values_a)
+                                diff_before = t - times_ch[idx - 1]
+                                diff_after = times_ch[idx] - t
+                                if diff_after <= diff_before:
+                                    aligned[i] = values_raw[idx]
+                                else:
+                                    aligned[i] = values_raw[idx - 1]
+                        aligned_values[label] = aligned
+                    else:
+                        aligned_values[label] = np.zeros(len(times))
                 
                 try:
-                    result_values = np.zeros_like(values_a)
-                    for i in range(len(values_a)):
-                        A = values_a[i]
-                        B = values_b[i]
-                        result_values[i] = eval(expression, {"__builtins__": {}}, {"A": A, "B": B})
+                    # Build evaluation context with functions
+                    context = {}
+                    context.update(_get_math_functions())
+                    context.update(_get_statistical_functions(times))
+                    
+                    # Add if_else for conditionals
+                    def if_else(condition, true_val, false_val):
+                        return np.where(condition, true_val, false_val)
+                    context['if_else'] = if_else
+                    
+                    # Add aligned values
+                    context.update(aligned_values)
+                    
+                    # Evaluate expression (vectorized)
+                    result_values = eval(expression, {"__builtins__": {}}, context)
+                    
+                    # Ensure result is array
+                    if isinstance(result_values, (int, float)):
+                        result_values = np.full(len(times), result_values)
                     
                     new_df = pd.DataFrame({
                         'SECONDS': times,
@@ -1637,13 +2332,27 @@ class OBD2MainWindow(QMainWindow):
                 except Exception as e:
                     logger.error(f"Error applying math channel '{name}' to {imp.filename}: {e}")
     
-    def _create_math_channel(self, name: str, expression: str, input_a: str, input_b: str, unit: str, 
+    def _create_math_channel(self, name: str, expression: str, inputs_json: str, unit: str, 
                              replacing: str = None):
-        """Create a math channel from the given expression."""
+        """Create a math channel from the given expression.
+        
+        Args:
+            name: Channel name
+            expression: Math expression using A, B, C, D, E variables
+            inputs_json: JSON string mapping input labels to channel names
+            unit: Output unit
+            replacing: Name of channel being replaced (for edit mode)
+        """
         import numpy as np
         import pandas as pd
         
-        logger.info(f"Creating math channel: {name} = {expression} (A={input_a}, B={input_b})")
+        # Parse inputs JSON
+        inputs = json.loads(inputs_json)
+        
+        INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
+        used_inputs = {k: v for k, v in inputs.items() if v}
+        
+        logger.info(f"Creating math channel: {name} = {expression} (inputs={used_inputs})")
         
         # If replacing an existing channel, remove it first
         if replacing and replacing != name:
@@ -1657,58 +2366,74 @@ class OBD2MainWindow(QMainWindow):
             if replacing in self.math_channels:
                 del self.math_channels[replacing]
         
-        # Store the math channel definition
+        # Store the math channel definition (new format)
         self.math_channels[name] = {
             'expression': expression,
-            'input_a': input_a,
-            'input_b': input_b,
+            'inputs': inputs,
             'unit': unit
         }
         
+        input_a = inputs.get('A', '')
+        
         # Process for each import
         for imp in self.imports:
-            if input_a not in imp.channels_data:
+            if not input_a or input_a not in imp.channels_data:
                 logger.warning(f"Input A '{input_a}' not found in {imp.filename}")
                 continue
             
+            # Get time points from input A
             df_a = imp.channels_data[input_a]
             times = df_a['SECONDS'].values
-            values_a = df_a['VALUE'].values
             
-            if input_b and input_b in imp.channels_data:
-                # Align B values to A's time points (nearest neighbor, prefer later)
-                df_b = imp.channels_data[input_b]
-                times_b = df_b['SECONDS'].values
-                values_b_raw = df_b['VALUE'].values
-                
-                # For each time in A, find nearest B value
-                values_b = np.zeros_like(values_a)
-                for i, t in enumerate(times):
-                    # Find index where t would be inserted
-                    idx = np.searchsorted(times_b, t)
+            # Build aligned values for all inputs
+            aligned_values = {}
+            for label in INPUT_LABELS:
+                input_ch = inputs.get(label, '')
+                if input_ch and input_ch in imp.channels_data:
+                    df = imp.channels_data[input_ch]
+                    times_ch = df['SECONDS'].values
+                    values_raw = df['VALUE'].values
                     
-                    if idx == 0:
-                        values_b[i] = values_b_raw[0]
-                    elif idx >= len(times_b):
-                        values_b[i] = values_b_raw[-1]
-                    else:
-                        # Check which is closer, prefer later (idx) if tied
-                        diff_before = t - times_b[idx - 1]
-                        diff_after = times_b[idx] - t
-                        if diff_after <= diff_before:
-                            values_b[i] = values_b_raw[idx]
+                    # Align to A's time points (nearest neighbor)
+                    aligned = np.zeros(len(times))
+                    for i, t in enumerate(times):
+                        idx = np.searchsorted(times_ch, t)
+                        if idx == 0:
+                            aligned[i] = values_raw[0]
+                        elif idx >= len(times_ch):
+                            aligned[i] = values_raw[-1]
                         else:
-                            values_b[i] = values_b_raw[idx - 1]
-            else:
-                values_b = np.zeros_like(values_a)
+                            diff_before = t - times_ch[idx - 1]
+                            diff_after = times_ch[idx] - t
+                            if diff_after <= diff_before:
+                                aligned[i] = values_raw[idx]
+                            else:
+                                aligned[i] = values_raw[idx - 1]
+                    aligned_values[label] = aligned
+                else:
+                    aligned_values[label] = np.zeros(len(times))
             
-            # Evaluate expression for each point
+            # Evaluate expression (vectorized)
             try:
-                result_values = np.zeros_like(values_a)
-                for i in range(len(values_a)):
-                    A = values_a[i]
-                    B = values_b[i]
-                    result_values[i] = eval(expression, {"__builtins__": {}}, {"A": A, "B": B})
+                # Build evaluation context with functions
+                context = {}
+                context.update(_get_math_functions())
+                context.update(_get_statistical_functions(times))
+                
+                # Add if_else for conditionals
+                def if_else(condition, true_val, false_val):
+                    return np.where(condition, true_val, false_val)
+                context['if_else'] = if_else
+                
+                # Add aligned values
+                context.update(aligned_values)
+                
+                # Evaluate expression
+                result_values = eval(expression, {"__builtins__": {}}, context)
+                
+                # Ensure result is array
+                if isinstance(result_values, (int, float)):
+                    result_values = np.full(len(times), result_values)
                 
                 # Create DataFrame for the new channel
                 new_df = pd.DataFrame({
@@ -1735,6 +2460,410 @@ class OBD2MainWindow(QMainWindow):
         # Refresh the UI - preserve visibility, but show the new math channel
         self._update_channel_controls_multi(preserve_visibility=True, show_channels={name})
         self.statusbar.showMessage(f"{'Updated' if replacing else 'Created'} math channel: {name}", 5000)
+        
+        # Reapply filters to include the new channel
+        if self.filters:
+            self._apply_filters()
+    
+    def _show_filter_dialog(self, edit_filter: str = None):
+        """Show dialog to create or edit a filter."""
+        if not self.imports:
+            QMessageBox.warning(self, "No Data", "Please load a CSV file first.")
+            return
+        
+        # Get all available channels (including math channels for filters)
+        all_channels = set()
+        channel_units = {}
+        for imp in self.imports:
+            for ch in imp.channels_data.keys():
+                all_channels.add(ch)
+                if ch not in channel_units and ch in imp.units:
+                    channel_units[ch] = imp.units[ch]
+        
+        # Get edit data if editing
+        edit_data = None
+        if edit_filter and edit_filter in self.filters:
+            edit_data = {'name': edit_filter, **self.filters[edit_filter]}
+        
+        dialog = FilterDialog(list(all_channels), channel_units, edit_data, self)
+        dialog.filter_created.connect(lambda n, e, inputs_json, m, b: self._create_filter(n, e, inputs_json, m, b, edit_filter))
+        dialog.exec()
+    
+    def _edit_filter(self, filter_name: str):
+        """Open edit dialog for a filter."""
+        self._show_filter_dialog(edit_filter=filter_name)
+    
+    def _create_filter(self, name: str, expression: str, inputs_json: str, mode: str, 
+                       buffer_seconds: float, replacing: str = None):
+        """Create or update a filter.
+        
+        Args:
+            name: Filter name
+            expression: Boolean expression
+            inputs_json: JSON string mapping input labels to channel names
+            mode: 'show' or 'hide'
+            buffer_seconds: Time buffer in seconds
+            replacing: Name of filter being replaced (for edit mode)
+        """
+        inputs = json.loads(inputs_json)
+        used_inputs = {k: v for k, v in inputs.items() if v}
+        
+        logger.info(f"Creating filter: {name} = {expression} (mode={mode}, buffer={buffer_seconds}s, inputs={used_inputs})")
+        
+        # If replacing an existing filter, remove it first (keep position in order)
+        old_position = -1
+        if replacing and replacing in self.filters:
+            if replacing in self.filter_order:
+                old_position = self.filter_order.index(replacing)
+                self.filter_order.remove(replacing)
+            if replacing != name:
+                del self.filters[replacing]
+                self._remove_filter_control(replacing)
+        
+        # Store the filter definition
+        self.filters[name] = {
+            'expression': expression,
+            'inputs': inputs,
+            'mode': mode,
+            'buffer_seconds': buffer_seconds,
+            'enabled': True
+        }
+        
+        # Add to order list (preserve position if editing, else add at end)
+        if name not in self.filter_order:
+            if old_position >= 0:
+                self.filter_order.insert(old_position, name)
+            else:
+                self.filter_order.append(name)
+        
+        # Update filter controls UI
+        self._update_filter_controls()
+        
+        # Apply filters to chart
+        self._apply_filters()
+        
+        self.statusbar.showMessage(f"{'Updated' if replacing else 'Created'} filter: {name}", 5000)
+    
+    def _remove_filter_control(self, filter_name: str):
+        """Remove a filter control widget from the UI."""
+        # Find and remove the filter control widget
+        for i in range(self.filters_layout.count()):
+            item = self.filters_layout.itemAt(i)
+            if item and item.widget():
+                widget = item.widget()
+                if hasattr(widget, 'filter_name') and widget.filter_name == filter_name:
+                    widget.deleteLater()
+                    break
+    
+    def _update_filter_controls(self):
+        """Update the filter controls in the sidebar."""
+        # Clear existing filter controls (except the label)
+        while self.filters_layout.count() > 1:
+            item = self.filters_layout.takeAt(1)
+            if item.widget():
+                item.widget().deleteLater()
+        
+        # Add controls for each filter in order (order determines precedence)
+        for name in self.filter_order:
+            if name in self.filters:
+                definition = self.filters[name]
+                control = self._create_filter_control(name, definition)
+                self.filters_layout.addWidget(control)
+        
+        # Show/hide filters section based on whether we have filters
+        self.filters_widget.setVisible(len(self.filters) > 0)
+    
+    def _create_filter_control(self, name: str, definition: Dict) -> QWidget:
+        """Create a control widget for a filter."""
+        widget = QWidget()
+        widget.filter_name = name
+        layout = QHBoxLayout(widget)
+        layout.setContentsMargins(0, 2, 0, 2)
+        
+        # Up/Down buttons for reordering (precedence)
+        up_btn = QPushButton("▲")
+        up_btn.setFixedSize(20, 20)
+        up_btn.setToolTip("Move up (lower precedence)")
+        up_btn.clicked.connect(lambda _, n=name: self._move_filter(n, -1))
+        layout.addWidget(up_btn)
+        
+        down_btn = QPushButton("▼")
+        down_btn.setFixedSize(20, 20)
+        down_btn.setToolTip("Move down (higher precedence)")
+        down_btn.clicked.connect(lambda _, n=name: self._move_filter(n, 1))
+        layout.addWidget(down_btn)
+        
+        # Checkbox to enable/disable (no text, just the checkbox)
+        checkbox = QCheckBox()
+        checkbox.setChecked(definition.get('enabled', True))
+        checkbox.setToolTip(f"Expression: {definition['expression']}\nMode: {definition['mode']}\nBuffer: ±{definition['buffer_seconds']}s")
+        checkbox.toggled.connect(lambda checked, n=name: self._toggle_filter(n, checked))
+        layout.addWidget(checkbox)
+        
+        # Mode indicator (to the left of filter name)
+        mode = definition.get('mode', 'show')
+        mode_label = QLabel("👁" if mode == 'show' else "🚫")
+        mode_label.setToolTip(f"Mode: {mode}")
+        layout.addWidget(mode_label)
+        
+        # Filter name label
+        name_label = QLabel(name)
+        name_label.setToolTip(f"Expression: {definition['expression']}\nMode: {definition['mode']}\nBuffer: ±{definition['buffer_seconds']}s")
+        layout.addWidget(name_label, 1)
+        
+        # Edit button
+        edit_btn = QPushButton("✏")
+        edit_btn.setFixedSize(24, 24)
+        edit_btn.setToolTip("Edit filter")
+        edit_btn.clicked.connect(lambda _, n=name: self._edit_filter(n))
+        layout.addWidget(edit_btn)
+        
+        # Delete button
+        delete_btn = QPushButton("🗑")
+        delete_btn.setFixedSize(24, 24)
+        delete_btn.setToolTip("Delete filter")
+        delete_btn.clicked.connect(lambda _, n=name: self._delete_filter(n))
+        layout.addWidget(delete_btn)
+        
+        return widget
+    
+    def _move_filter(self, filter_name: str, direction: int):
+        """Move a filter up or down in the order list.
+        
+        Args:
+            filter_name: Name of the filter to move
+            direction: -1 for up (lower precedence), +1 for down (higher precedence)
+        """
+        if filter_name not in self.filter_order:
+            return
+        
+        idx = self.filter_order.index(filter_name)
+        new_idx = idx + direction
+        
+        # Check bounds
+        if new_idx < 0 or new_idx >= len(self.filter_order):
+            return
+        
+        # Swap positions
+        self.filter_order[idx], self.filter_order[new_idx] = self.filter_order[new_idx], self.filter_order[idx]
+        
+        # Update UI and reapply filters
+        self._update_filter_controls()
+        self._apply_filters()
+    
+    def _toggle_filter(self, filter_name: str, enabled: bool):
+        """Toggle a filter on/off."""
+        if filter_name in self.filters:
+            self.filters[filter_name]['enabled'] = enabled
+            self._apply_filters()
+    
+    def _delete_filter(self, filter_name: str):
+        """Delete a filter."""
+        if filter_name in self.filters:
+            del self.filters[filter_name]
+            if filter_name in self.filter_order:
+                self.filter_order.remove(filter_name)
+            self._update_filter_controls()
+            self._apply_filters()
+            self.statusbar.showMessage(f"Deleted filter: {filter_name}", 3000)
+    
+    def _apply_filters(self):
+        """Apply all enabled filters to the chart widget with precedence.
+        
+        Filters are processed in order (filter_order list). Each filter modifies
+        the visibility mask based on its mode:
+        - Show: adds matching intervals to visible set
+        - Hide: removes matching intervals from visible set
+        
+        Last filter in list = highest precedence (applied last, wins conflicts).
+        """
+        import numpy as np
+        
+        if not self.imports:
+            return
+        
+        # Collect enabled filters in order
+        active_filters = []
+        for name in self.filter_order:
+            if name in self.filters and self.filters[name].get('enabled', True):
+                active_filters.append((name, self.filters[name]))
+        
+        if not active_filters:
+            # No active filters - show all data
+            self.chart_widget.set_filter_mask(None)
+            return
+        
+        INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
+        
+        filter_masks = {}  # {import_index: {channel: mask_array}}
+        filter_intervals = {}  # {import_index: [(start, end), ...]} for line breaks
+        
+        for imp_idx, imp in enumerate(self.imports):
+            # Initialize visibility mask for each channel (start with all visible)
+            channel_masks = {}
+            for ch_name, ch_df in imp.channels_data.items():
+                channel_masks[ch_name] = np.ones(len(ch_df), dtype=bool)
+            
+            # Track final merged intervals for line breaks
+            final_show_intervals = []
+            
+            # Check if any show filter exists (determines initial state)
+            # If any show filter exists, start with nothing visible (shows add)
+            # If only hide filters, start with all visible (hides remove)
+            has_any_show = any(defn['mode'] == 'show' for _, defn in active_filters)
+            if has_any_show:
+                # Start with nothing visible
+                for ch_name in channel_masks:
+                    channel_masks[ch_name] = np.zeros(len(channel_masks[ch_name]), dtype=bool)
+            
+            # Process filters BOTTOM to TOP (reverse order) so top = highest precedence
+            for filter_name, definition in reversed(active_filters):
+                expression = definition['expression']
+                inputs = definition['inputs']
+                mode = definition['mode']
+                buffer_seconds = definition['buffer_seconds']
+                
+                input_a = inputs.get('A', '')
+                if not input_a or input_a not in imp.channels_data:
+                    logger.warning(f"Filter '{filter_name}': Input A '{input_a}' not found in import {imp_idx}")
+                    continue
+                
+                # Get time points from input A
+                df_a = imp.channels_data[input_a]
+                times = df_a['SECONDS'].values
+                
+                # Build aligned values for all inputs (vectorized)
+                aligned_values = {}
+                for label in INPUT_LABELS:
+                    input_ch = inputs.get(label, '')
+                    if input_ch and input_ch in imp.channels_data:
+                        df = imp.channels_data[input_ch]
+                        times_ch = df['SECONDS'].values
+                        values_raw = df['VALUE'].values
+                        
+                        # Vectorized alignment using searchsorted
+                        indices = np.searchsorted(times_ch, times)
+                        indices = np.clip(indices, 1, len(times_ch) - 1)
+                        
+                        # Choose nearest neighbor
+                        diff_before = times - times_ch[indices - 1]
+                        diff_after = times_ch[indices] - times
+                        use_after = diff_after <= diff_before
+                        
+                        aligned = np.where(use_after, values_raw[indices], values_raw[indices - 1])
+                        aligned = np.where(indices == 0, values_raw[0], aligned)
+                        aligned = np.where(indices >= len(times_ch), values_raw[-1], aligned)
+                        
+                        aligned_values[label] = aligned
+                    else:
+                        aligned_values[label] = np.zeros(len(times))
+                
+                try:
+                    # Build evaluation context
+                    context = {}
+                    context.update(_get_math_functions())
+                    context.update(_get_statistical_functions(times))
+                    
+                    def if_else(condition, true_val, false_val):
+                        return np.where(condition, true_val, false_val)
+                    context['if_else'] = if_else
+                    context.update(aligned_values)
+                    
+                    # Evaluate expression
+                    result = eval(expression, {"__builtins__": {}}, context)
+                    
+                    # Convert to boolean mask
+                    if isinstance(result, np.ndarray):
+                        bool_mask = result.astype(bool)
+                    else:
+                        bool_mask = np.full(len(times), bool(result))
+                    
+                    # Get matching time points
+                    matching_times = times[bool_mask]
+                    
+                    logger.info(f"Filter '{filter_name}': {len(matching_times)} matches out of {len(times)} points (mode={mode})")
+                    
+                    if len(matching_times) == 0:
+                        continue
+                    
+                    # Convert to intervals [t - buffer, t + buffer]
+                    intervals = [(t - buffer_seconds, t + buffer_seconds) for t in matching_times]
+                    
+                    # Merge overlapping intervals
+                    intervals.sort(key=lambda x: x[0])
+                    merged = [intervals[0]]
+                    for start, end in intervals[1:]:
+                        if start <= merged[-1][1]:
+                            merged[-1] = (merged[-1][0], max(merged[-1][1], end))
+                        else:
+                            merged.append((start, end))
+                    
+                    # Apply this filter's effect to each channel's mask
+                    interval_starts = np.array([iv[0] for iv in merged])
+                    interval_ends = np.array([iv[1] for iv in merged])
+                    
+                    for ch_name, ch_df in imp.channels_data.items():
+                        ch_times = ch_df['SECONDS'].values
+                        
+                        # Check which points fall within the merged intervals
+                        insert_idx = np.searchsorted(interval_starts, ch_times, side='right') - 1
+                        in_interval = np.zeros(len(ch_times), dtype=bool)
+                        valid_idx = insert_idx >= 0
+                        in_interval[valid_idx] = ch_times[valid_idx] <= interval_ends[insert_idx[valid_idx]]
+                        
+                        # Apply based on mode
+                        if mode == 'show':
+                            # Show mode: add matching points to visible set
+                            channel_masks[ch_name] = channel_masks[ch_name] | in_interval
+                        else:
+                            # Hide mode: remove matching points from visible set
+                            channel_masks[ch_name] = channel_masks[ch_name] & ~in_interval
+                    
+                    # Track intervals for line breaks (only from show filters)
+                    if mode == 'show':
+                        final_show_intervals.extend(merged)
+                    
+                except Exception as e:
+                    logger.error(f"Error evaluating filter '{filter_name}': {e}")
+                    continue
+            
+            # Store final masks
+            filter_masks[imp_idx] = channel_masks
+            
+            # Compute visible intervals from the final mask for NaN separators
+            # Use the first channel's mask and times as reference
+            if channel_masks:
+                ref_channel = list(imp.channels_data.keys())[0]
+                ref_times = imp.channels_data[ref_channel]['SECONDS'].values
+                ref_mask = channel_masks[ref_channel]
+                
+                # Find contiguous visible regions
+                visible_intervals = []
+                in_visible = False
+                start_time = None
+                
+                for i, (t, visible) in enumerate(zip(ref_times, ref_mask)):
+                    if visible and not in_visible:
+                        # Start of visible region
+                        in_visible = True
+                        start_time = t
+                    elif not visible and in_visible:
+                        # End of visible region
+                        in_visible = False
+                        visible_intervals.append((start_time, ref_times[i-1]))
+                
+                # Close final interval if still in visible region
+                if in_visible and start_time is not None:
+                    visible_intervals.append((start_time, ref_times[-1]))
+                
+                if visible_intervals:
+                    filter_intervals[imp_idx] = visible_intervals
+            
+            visible_count = np.sum(list(channel_masks.values())[0]) if channel_masks else 0
+            logger.info(f"Import {imp_idx}: Final filter result, {visible_count} visible points, {len(filter_intervals.get(imp_idx, []))} intervals")
+        
+        # Pass filter masks and intervals to chart widget
+        self.chart_widget.set_filter_mask(filter_masks, filter_intervals)
     
     def _load_folder(self, folder_path: str):
         """Load CSV files from a folder."""

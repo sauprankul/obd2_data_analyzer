@@ -93,7 +93,9 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Scrollable plot container
 - ✅ 15px spacing between charts for readability
 - ✅ Scroll wheel scrolls graph area (not zoom)
+- ✅ Ctrl+scroll zooms X-axis (zoom in/out centered on view)
 - ✅ Split window mode for dual monitor setups
+- ✅ Charts sorted by unit then alphabetically (matching sidebar)
 
 #### 2.2 Time Navigation Controls
 
@@ -137,6 +139,7 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Channel list in sidebar with units
 - ✅ Defaults to show all channels
 - ✅ Dynamic sorting: selected channels at top, sorted by unit then alphabetically
+- ✅ Checkbox and color indicator on left side (consistent with Filters layout)
 
 ### 3. User Interface & Layout
 
@@ -153,6 +156,8 @@ A professional **native Windows application** for importing, processing, and vis
 **Current Working Components:**
 
 - ✅ QSplitter for drag-adjustable sidebar:charts ratio
+- ✅ Sidebar width resizable relative to window (minimum width enforced)
+- ✅ Time navigation buttons expand with sidebar width
 - ✅ Splitter state persisted across sessions
 - ✅ Window geometry persistence
 
@@ -175,6 +180,8 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Import legend showing filename, color, duration (h:m:s), offset, per-import Sync button
 - ✅ Split window mode via View menu
 - ✅ Per-import Synchronize dialog for time offset adjustment
+- ✅ Taller/Shorter/Math Channel/Create Filter buttons in single row
+- ✅ Filters section above Show All/Hide All buttons
 
 #### 3.3 Modal Interfaces
 
@@ -224,7 +231,7 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Math channels automatically computed for new imports
 - ✅ Math channels shown by default when created
 
-#### 4.2 Advanced Math Operations (Future)
+#### 4.2 Advanced Math Operations
 
 **Requirements:**
 
@@ -232,7 +239,59 @@ A professional **native Windows application** for importing, processing, and vis
 - Statistical functions (min, max, avg, rolling average)
 - Multi-channel expressions (C, D, E... inputs)
 
-**Implementation Status:** ❌ Not Planned Yet
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+
+- ✅ Multi-channel inputs (A, B, C, D, E) - up to 5 input channels
+- ✅ Boolean/comparison operators: <, >, <=, >=, ==, !=
+- ✅ Conditional expressions: if_else(condition, true_val, false_val)
+- ✅ Math functions: abs, min, max, sqrt, log, log10, exp, sin, cos, tan, floor, ceil, round, pow
+- ✅ Statistical functions: rolling_avg(X, seconds), rolling_min, rolling_max, delta, cumsum, clip(X, min, max)
+- ✅ Rolling window functions use seconds (not sample count) for time-based windows
+- ✅ Array-wide statistics: np_min, np_max, np_mean, np_std
+- ✅ Constants: pi, e
+- ✅ Vectorized evaluation for performance
+- ✅ Backward compatible with legacy 2-input math channels
+- ✅ Input dropdowns sorted by unit then alphabetically (matching sidebar)
+- ✅ Channel names display with unit suffix in dropdowns
+
+#### 4.3 Data Filters
+
+**Requirements:**
+
+- Button should be to the right of Create Math Channel, labeled "Create Filter"
+- Filters should have names
+- Allow the use of any channels (including math channels) as inputs
+- Expression must evaluate to boolean, should validate immediately on-type in modal. Invalid should not allow saving.
+- All basic and advanced math operations should be allowed in boolean expression
+- Modal should allow Show and Hide options for filter as toggle. Ie, do you show or hide when filter evaluates to true
+- Modal should allow defining a time buffer between +/- 0.5s and +/- 10 minutes. If Show mode, a singe point match should show all data within buffer. If Hide mode, a single point match should hide all data within buffer.
+- Input channel matching on the x-axis should behave the same as math channels - reuse the interpolation/matching code.
+- Filters should be listed in Filters section above Shown.
+- Edit button and checkbox next to each filter.
+- Filters should apply as a union. Ie if one import matches a filter, all imports should be assumed to match the filter at that point. Take the offsets into account. If import 1 matches a filter at X=5000, and import 2 has an offset of +500, import 2 should be assumed to match at X=5500.
+
+**Implementation Status:** ✅ Fully Implemented
+**Current Working Components:**
+
+- ✅ "Create Filter" button next to "Math Channel" button
+- ✅ FilterDialog with name, multi-channel inputs (A-E), boolean expression
+- ✅ Real-time expression validation (must evaluate to boolean)
+- ✅ All math functions from 4.2 available in filter expressions
+- ✅ Show/Hide mode toggle with 👁/🚫 icons
+- ✅ Time buffer selection (±0.1s to ±10min, default ±0.1s)
+- ✅ Filters section in sidebar above channel list
+- ✅ Enable/disable checkbox, mode icon, edit button, delete button per filter
+- ✅ Filter masks applied to chart data
+- ✅ Reuses interpolation/alignment code from math channels
+- ✅ Optimized interval merging algorithm O(n + m log m) for performance
+- ✅ Line breaks between non-overlapping filter intervals (NaN separators)
+- ✅ Multiple Show filters merge overlapping intervals correctly
+- ✅ Filter name validation (required, shows popup if empty)
+- ✅ Input dropdowns sorted by unit then alphabetically (matching sidebar)
+- ✅ Filter precedence: top filter = highest precedence, processed bottom-to-top
+- ✅ Up/down buttons for filter reordering in sidebar
+- ✅ Filters auto-apply when new math channels are created
 
 ### 5. Multi-Import Visualization
 
@@ -316,8 +375,11 @@ A professional **native Windows application** for importing, processing, and vis
 - ✅ Recent files menu in native app
 - ✅ Dedicated home screen with Past Imports list
 - ✅ Double-click to open past import
-- ✅ Clear History button
+- ✅ Multi-select with Ctrl+Click for batch opening
+- ✅ Large centered "Open Selected" button
+- ✅ Clear History button (centered below)
 - ✅ Persisted via QSettings
+- ✅ Sequential file loading for multi-select (avoids race conditions)
 
 #### 6.2 Window State Persistence
 
@@ -350,7 +412,8 @@ A professional **native Windows application** for importing, processing, and vis
 
 - ✅ Robust CSV parsing
 - ✅ Semicolon delimiter support
-- ✅ Loading dialog during file parsing
+- ✅ Loading dialog with animated GIF during file parsing
+- ✅ Background thread for file loading (keeps UI responsive)
 
 #### 7.2 Data Validation
 
@@ -464,9 +527,10 @@ A professional **native Windows application** for importing, processing, and vis
 ### ✅ PyInstaller PyQt6 DLL Load Failure - RESOLVED
 
 **Issue:** `DLL load failed while importing QtWidgets: The specified procedure could not be found` when running the PyInstaller-built exe
-**Status:** FIXED (Dec 2024)
+**Status:** FIXED (Dec 2025)
 **Root Cause:** PyQt6 6.10.1 has DLL loading compatibility issues with PyInstaller on Windows. The newer PyQt6 version's `.pyd` bindings couldn't locate the correct Qt6 DLL procedures when bundled by PyInstaller. Additionally, `shiboken2` (PySide2's Qt5 binding library) was being bundled and conflicting with PyQt6/Qt6.
-**Solution:** 
+**Solution:**
+
 1. Downgraded PyQt6 from 6.10.1 to 6.5.2 (`pip install PyQt6==6.5.2 PyQt6-Qt6==6.5.2 PyQt6-sip==13.5.2`)
 2. Added exclusions for `PySide2`, `shiboken2`, `PySide6`, `shiboken6`, `PyQt5` in the spec file to prevent Qt version conflicts
 3. Pinned PyQt6 version in `requirements.txt` to `>=6.5.0,<6.6.0`
