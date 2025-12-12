@@ -85,6 +85,8 @@ class MultiImportChannelControl(QWidget):
         super().__init__(parent)
         
         self.channel_name = channel_name
+        self.display_name = display_name
+        self.unit = unit
         self.checkboxes: List[QCheckBox] = []
         
         layout = QHBoxLayout(self)
@@ -121,6 +123,16 @@ class MultiImportChannelControl(QWidget):
             self.checkboxes[import_index].blockSignals(True)
             self.checkboxes[import_index].setChecked(visible)
             self.checkboxes[import_index].blockSignals(False)
+    
+    def is_any_selected(self) -> bool:
+        """Return True if at least one import checkbox is checked."""
+        return any(cb.isChecked() for cb in self.checkboxes)
+    
+    def sort_key(self, is_selected: bool) -> tuple:
+        """Return sort key: (not selected, unit, display_name)."""
+        # Selected items first (0), then unselected (1)
+        # Then sort by unit, then by display name
+        return (0 if is_selected else 1, self.unit.lower(), self.display_name.lower())
 
 
 class ChannelControlWidget(QWidget):
@@ -282,6 +294,27 @@ class SynchronizeDialog(QDialog):
         spinbox = self.offset_spinboxes[import_index - 1]  # -1 because base is not in list
         new_val = spinbox.value() + delta
         spinbox.setValue(new_val)
+
+
+class SidebarWindow(QMainWindow):
+    """Separate window for sidebar controls in split window mode."""
+    
+    closed = pyqtSignal()
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("OBD2 Controls")
+        self.setMinimumSize(350, 600)
+        
+        # Central widget will be set when sidebar is moved here
+        self.central = QWidget()
+        self.setCentralWidget(self.central)
+        self.layout = QVBoxLayout(self.central)
+        self.layout.setContentsMargins(5, 5, 5, 5)
+    
+    def closeEvent(self, event):
+        self.closed.emit()
+        event.accept()
 
 
 class HomeWidget(QWidget):
@@ -514,6 +547,10 @@ class OBD2MainWindow(QMainWindow):
         # Synchronize dialog reference
         self.sync_dialog: Optional[SynchronizeDialog] = None
         
+        # Split window mode
+        self.sidebar_window: Optional['SidebarWindow'] = None
+        self.is_split_mode = False
+        
         # Setup UI
         self._setup_ui()
         self._setup_menu()
@@ -556,9 +593,9 @@ class OBD2MainWindow(QMainWindow):
         self.splitter = QSplitter(Qt.Orientation.Horizontal)
         viz_layout.addWidget(self.splitter)
         
-        # Left panel - Controls
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
+        # Left panel - Controls (stored as instance variable for split window mode)
+        self.left_panel = QWidget()
+        left_layout = QVBoxLayout(self.left_panel)
         left_layout.setContentsMargins(0, 0, 0, 0)
         
         # Import legend group
@@ -619,7 +656,7 @@ class OBD2MainWindow(QMainWindow):
         self.chart_widget = OBD2ChartWidget()
         
         # Add panels to splitter
-        self.splitter.addWidget(left_panel)
+        self.splitter.addWidget(self.left_panel)
         self.splitter.addWidget(self.chart_widget)
         
         # Set initial splitter sizes (30% controls, 70% charts)
@@ -693,6 +730,14 @@ class OBD2MainWindow(QMainWindow):
         hide_all_action.triggered.connect(self._hide_all_channels)
         view_menu.addAction(hide_all_action)
         
+        view_menu.addSeparator()
+        
+        self.split_window_action = QAction("&Split Window Mode", self)
+        self.split_window_action.setShortcut("Ctrl+W")
+        self.split_window_action.setCheckable(True)
+        self.split_window_action.triggered.connect(self._toggle_split_window)
+        view_menu.addAction(self.split_window_action)
+        
         # Help menu
         help_menu = menubar.addMenu("&Help")
         
@@ -702,14 +747,8 @@ class OBD2MainWindow(QMainWindow):
     
     def _setup_toolbar(self):
         """Setup the toolbar."""
-        toolbar = QToolBar("Main Toolbar")
-        toolbar.setMovable(False)
-        self.addToolBar(toolbar)
-        
-        # Open file button
-        open_btn = QPushButton("📂 Open CSV")
-        open_btn.clicked.connect(self._open_file_dialog)
-        toolbar.addWidget(open_btn)
+        # Toolbar is kept minimal - main actions are in File menu and home screen
+        pass
     
     def _setup_statusbar(self):
         """Setup the status bar."""
@@ -954,8 +993,8 @@ class OBD2MainWindow(QMainWindow):
         # Get colors for each import
         import_colors = [imp.color for imp in self.imports]
         
-        # Create controls for each channel
-        for channel in sorted(all_channels):
+        # Create controls for each channel (don't add to layout yet)
+        for channel in all_channels:
             # Get display name and unit from first import that has this channel
             display_name = channel
             unit = ''
@@ -967,8 +1006,26 @@ class OBD2MainWindow(QMainWindow):
             
             control = MultiImportChannelControl(channel, display_name, unit, import_colors)
             control.visibility_changed.connect(self._on_channel_import_toggled)
-            
             self.channel_controls[channel] = control
+        
+        # Sort and add to layout
+        self._sort_channel_controls()
+    
+    def _sort_channel_controls(self):
+        """Sort channel controls: selected at top, then by unit, then alphabetically."""
+        # Remove all widgets from layout (but don't delete them)
+        while self.channel_list_layout.count() > 0:
+            item = self.channel_list_layout.takeAt(0)
+            # Don't delete - we're just reordering
+        
+        # Sort controls
+        sorted_controls = sorted(
+            self.channel_controls.values(),
+            key=lambda c: c.sort_key(c.is_any_selected())
+        )
+        
+        # Re-add in sorted order
+        for control in sorted_controls:
             self.channel_list_layout.addWidget(control)
         
         # Add stretch at end
@@ -977,6 +1034,9 @@ class OBD2MainWindow(QMainWindow):
     def _on_channel_import_toggled(self, channel: str, import_index: int, visible: bool):
         """Handle channel visibility toggle for a specific import."""
         self.chart_widget.set_channel_import_visible(channel, import_index, visible)
+        
+        # Re-sort channel controls
+        self._sort_channel_controls()
     
     def _show_synchronize_dialog(self):
         """Show the synchronize imports dialog."""
@@ -1151,6 +1211,55 @@ class OBD2MainWindow(QMainWindow):
         self.chart_widget.reset_time_range()
         self._update_time_inputs()
         self._update_zoom_buttons()
+    
+    def _toggle_split_window(self, checked: bool):
+        """Toggle split window mode - sidebar in separate window."""
+        if checked:
+            # Enter split mode - move sidebar to separate window
+            self.is_split_mode = True
+            
+            # Create sidebar window
+            self.sidebar_window = SidebarWindow()
+            self.sidebar_window.closed.connect(self._on_sidebar_window_closed)
+            
+            # Remove left panel from splitter
+            self.left_panel.setParent(None)
+            
+            # Add to sidebar window
+            self.sidebar_window.layout.addWidget(self.left_panel)
+            
+            # Show sidebar window
+            self.sidebar_window.show()
+            
+            # Position sidebar window to the left of main window
+            main_geo = self.geometry()
+            self.sidebar_window.move(main_geo.left() - 360, main_geo.top())
+            self.sidebar_window.resize(350, main_geo.height())
+            
+        else:
+            # Exit split mode - move sidebar back to main window
+            self._restore_sidebar()
+    
+    def _on_sidebar_window_closed(self):
+        """Handle sidebar window being closed."""
+        self.split_window_action.setChecked(False)
+        self._restore_sidebar()
+    
+    def _restore_sidebar(self):
+        """Restore sidebar to main window."""
+        if self.sidebar_window:
+            # Remove from sidebar window
+            self.left_panel.setParent(None)
+            
+            # Add back to splitter at position 0
+            self.splitter.insertWidget(0, self.left_panel)
+            self.splitter.setSizes([300, 900])
+            
+            # Close and cleanup sidebar window
+            self.sidebar_window.close()
+            self.sidebar_window = None
+        
+        self.is_split_mode = False
     
     def _zoom_in(self):
         """Zoom in by reducing time range by 10% (5% each side)."""
