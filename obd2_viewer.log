@@ -244,3 +244,12 @@
 2025-12-11 18:27:46,153 - obd2_viewer.database.connection - INFO - Database connection test successful
 2025-12-11 18:27:46,156 - obd2_viewer.app.main_application - INFO - Starting OBD2 Viewer Application on http://localhost:8052
 2025-12-11 18:27:58,129 - obd2_viewer.app.main_application - INFO - Loaded import 'Nov 4 gurdwara' with 29 channels
+2025-12-11 18:49:12,255 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 18:49:12,255 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 18:49:15,126 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 18:49:15,435 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 18:49:20,611 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 18:49:44,262 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 18:49:44,293 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 18:49:44,451 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 18:49:47,874 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv

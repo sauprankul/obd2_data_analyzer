@@ -1,57 +1,52 @@
 # OBD2 Data Visualization Tool
 
-[![CI/CD Pipeline](https://github.com/your-org/obd2-data-visualization/actions/workflows/ci.yml/badge.svg)](https://github.com/your-org/obd2-data-visualization/actions/workflows/ci.yml)
-[![codecov](https://codecov.io/gh/your-org/obd2-data-visualization/branch/main/graph/badge.svg)](https://codecov.io/gh/your-org/obd2-data-visualization)
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A professional web-based tool for visualizing and comparing OBD2 (On-Board Diagnostics) CSV data from vehicles. Built with Plotly Dash, this application provides interactive dashboards for analyzing vehicle sensor data, creating custom groups, and exporting visualizations.
+A professional **native Windows application** for visualizing and comparing OBD2 (On-Board Diagnostics) CSV data from vehicles. Built with PyQt6 and PyQtGraph for high-performance, hardware-accelerated chart rendering.
+
+**NO BROWSER. NO WEB SERVER. PURE NATIVE WINDOWS.**
 
 ## 🚀 Features
 
-- **Interactive Web Dashboard**: Modern, responsive interface built with Dash and Bootstrap
-- **Multi-Format Support**: Handles various CSV formats with automatic delimiter detection
-- **Real-Time Data Visualization**: Interactive charts with zoom, pan, and hover capabilities
-- **PID Grouping**: Organize related sensors into custom groups for better analysis
-- **Time Navigation**: Easily navigate through time-series data with intuitive controls
-- **File Upload Interface**: Drag-and-drop or click-to-upload CSV files
-- **Recent Folders**: Quick access to recently analyzed data folders
-- **Data Validation**: Automatic validation and error handling for malformed files
-- **Export Capabilities**: Save charts and analysis results
+- **Native Windows Application**: Fast, responsive UI with no browser overhead
+- **Hardware-Accelerated Charts**: PyQtGraph with OpenGL for smooth rendering of millions of data points
+- **Multi-Channel CSV Support**: Handles interleaved multi-channel OBD2 data (Car Scanner format)
+- **Synchronized Time Navigation**: All channels stay in sync with granular time controls (0.1s to 5min)
+- **Channel Visibility Controls**: Show/hide individual channels with color-coded indicators
+- **Crosshair & Value Display**: Hover over charts to see exact values
+- **Recent Files**: Quick access to recently analyzed data
+- **Window State Persistence**: Remembers window size, position, and panel layout
 
 ## 📦 Installation
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- pip package manager
+- Python 3.9 or higher
+- Windows 10/11
 
-### Quick Start
+### Quick Start (Recommended)
 
-1. **Clone the repository**:
+1. **Install dependencies**:
    ```bash
-   git clone https://github.com/your-org/obd2-data-visualization.git
-   cd obd2-data-visualization
+   pip install PyQt6 pyqtgraph numpy pandas scipy
    ```
 
-2. **Install dependencies**:
+2. **Run the native application**:
    ```bash
-   pip install -r requirements.txt
+   python src/obd2_native.py
    ```
 
-3. **Run the application**:
-   ```bash
-   python src/obd2_main.py
-   ```
-
-4. **Open your browser** and navigate to `http://localhost:8052`
+   Or double-click `run_native.bat`
 
 ### Windows Users
 
-Simply run the included PowerShell script:
-```powershell
-.\windows_run.ps1
+Simply double-click:
 ```
+run_native.bat
+```
+
+This will automatically install dependencies if needed and launch the application.
 
 ### Development Installation
 
