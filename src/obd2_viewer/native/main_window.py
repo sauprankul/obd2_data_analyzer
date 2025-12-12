@@ -134,7 +134,9 @@ class TimeNavigationWidget(QWidget):
         self.btn_right_5min = QPushButton("5min ▶")
         self.btn_right_1min = QPushButton("1min ▶")
         
-        self.btn_reset.setStyleSheet("background-color: #e0e0e0; font-weight: bold;")
+        # Consistent gray button style
+        btn_style = "background-color: #616161; color: white; font-weight: bold;"
+        self.btn_reset.setStyleSheet(btn_style)
         
         for btn in [self.btn_left_1min, self.btn_left_5min, self.btn_reset,
                     self.btn_right_5min, self.btn_right_1min]:
@@ -142,6 +144,20 @@ class TimeNavigationWidget(QWidget):
             nav_layout3.addWidget(btn)
         
         layout.addLayout(nav_layout3)
+        
+        # Zoom buttons - Row 4
+        zoom_layout = QHBoxLayout()
+        self.btn_zoom_in = QPushButton("🔍+ Zoom In")
+        self.btn_zoom_out = QPushButton("🔍- Zoom Out")
+        
+        self.btn_zoom_in.setStyleSheet(btn_style)
+        self.btn_zoom_out.setStyleSheet(btn_style)
+        
+        for btn in [self.btn_zoom_in, self.btn_zoom_out]:
+            btn.setFixedHeight(32)
+            zoom_layout.addWidget(btn)
+        
+        layout.addLayout(zoom_layout)
 
 
 class OBD2MainWindow(QMainWindow):
@@ -211,8 +227,9 @@ class OBD2MainWindow(QMainWindow):
         btn_layout = QHBoxLayout()
         self.btn_show_all = QPushButton("Show All")
         self.btn_hide_all = QPushButton("Hide All")
-        self.btn_show_all.setStyleSheet("background-color: #4CAF50; color: white;")
-        self.btn_hide_all.setStyleSheet("background-color: #9E9E9E; color: white;")
+        btn_style = "background-color: #616161; color: white; font-weight: bold;"
+        self.btn_show_all.setStyleSheet(btn_style)
+        self.btn_hide_all.setStyleSheet(btn_style)
         btn_layout.addWidget(self.btn_show_all)
         btn_layout.addWidget(self.btn_hide_all)
         channel_layout.addLayout(btn_layout)
@@ -326,21 +343,6 @@ class OBD2MainWindow(QMainWindow):
         open_btn = QPushButton("📂 Open CSV")
         open_btn.clicked.connect(self._open_file_dialog)
         toolbar.addWidget(open_btn)
-        
-        toolbar.addSeparator()
-        
-        # Quick navigation buttons
-        left_btn = QPushButton("◀ 30s")
-        left_btn.clicked.connect(lambda: self._shift_time(-30))
-        toolbar.addWidget(left_btn)
-        
-        right_btn = QPushButton("30s ▶")
-        right_btn.clicked.connect(lambda: self._shift_time(30))
-        toolbar.addWidget(right_btn)
-        
-        reset_btn = QPushButton("Reset View")
-        reset_btn.clicked.connect(self._reset_time_range)
-        toolbar.addWidget(reset_btn)
     
     def _setup_statusbar(self):
         """Setup the status bar."""
@@ -384,6 +386,10 @@ class OBD2MainWindow(QMainWindow):
         
         nav.btn_reset.clicked.connect(self._reset_time_range)
         nav.go_to_center_btn.clicked.connect(self._go_to_center)
+        
+        # Zoom buttons
+        nav.btn_zoom_in.clicked.connect(self._zoom_in)
+        nav.btn_zoom_out.clicked.connect(self._zoom_out)
         
         nav.start_input.valueChanged.connect(self._on_time_input_changed)
         nav.end_input.valueChanged.connect(self._on_time_input_changed)
@@ -466,6 +472,9 @@ class OBD2MainWindow(QMainWindow):
         
         # Update time navigation inputs
         self._update_time_inputs()
+        
+        # Update zoom button states
+        self._update_zoom_buttons()
         
         # Update status
         num_channels = len(channels_data)
@@ -562,6 +571,80 @@ class OBD2MainWindow(QMainWindow):
         """Reset to full time range."""
         self.chart_widget.reset_time_range()
         self._update_time_inputs()
+        self._update_zoom_buttons()
+    
+    def _zoom_in(self):
+        """Zoom in by reducing time range by 10% (5% each side)."""
+        chart = self.chart_widget
+        duration = chart.current_end - chart.current_start
+        center = (chart.current_start + chart.current_end) / 2
+        
+        # Reduce duration by 10% (5% each side)
+        new_duration = duration * 0.9
+        
+        # Minimum duration check (approximately 10 seconds to keep markers readable)
+        min_duration = 10.0
+        if new_duration < min_duration:
+            new_duration = min_duration
+        
+        new_start = center - new_duration / 2
+        new_end = center + new_duration / 2
+        
+        chart.set_time_range(new_start, new_end)
+        self._update_time_inputs()
+        self._update_zoom_buttons()
+    
+    def _zoom_out(self):
+        """Zoom out by increasing time range by 10% (5% each side)."""
+        chart = self.chart_widget
+        duration = chart.current_end - chart.current_start
+        center = (chart.current_start + chart.current_end) / 2
+        
+        # Increase duration by ~11% (inverse of 0.9)
+        new_duration = duration / 0.9
+        
+        # Maximum is full data range
+        max_duration = chart.max_time - chart.min_time
+        if new_duration > max_duration:
+            new_duration = max_duration
+        
+        new_start = center - new_duration / 2
+        new_end = center + new_duration / 2
+        
+        # Clamp to data bounds
+        if new_start < chart.min_time:
+            new_start = chart.min_time
+            new_end = new_start + new_duration
+        if new_end > chart.max_time:
+            new_end = chart.max_time
+            new_start = new_end - new_duration
+        
+        chart.set_time_range(new_start, new_end)
+        self._update_time_inputs()
+        self._update_zoom_buttons()
+    
+    def _update_zoom_buttons(self):
+        """Update zoom button enabled states."""
+        chart = self.chart_widget
+        nav = self.time_nav
+        
+        current_duration = chart.current_end - chart.current_start
+        max_duration = chart.max_time - chart.min_time
+        min_duration = 10.0  # Minimum zoom level
+        
+        # Consistent button styles
+        btn_style_enabled = "background-color: #616161; color: white; font-weight: bold;"
+        btn_style_disabled = "background-color: #BDBDBD; color: #757575;"
+        
+        # Disable zoom in if at minimum duration
+        at_min_zoom = current_duration <= min_duration
+        nav.btn_zoom_in.setEnabled(not at_min_zoom)
+        nav.btn_zoom_in.setStyleSheet(btn_style_disabled if at_min_zoom else btn_style_enabled)
+        
+        # Disable zoom out if at maximum duration (full range)
+        at_max_zoom = current_duration >= max_duration * 0.99  # 99% tolerance
+        nav.btn_zoom_out.setEnabled(not at_max_zoom)
+        nav.btn_zoom_out.setStyleSheet(btn_style_disabled if at_max_zoom else btn_style_enabled)
     
     def _go_to_center(self):
         """Go to the center time specified in input."""

@@ -16,8 +16,14 @@ import pandas as pd
 import colorsys
 
 
+# Signal for synchronized hover across all plots
 class ChannelPlotWidget(pg.PlotWidget):
     """Individual channel plot with optimized rendering."""
+    
+    # Signal emitted when mouse hovers - sends x position
+    hover_x_changed = pyqtSignal(float)
+    # Signal emitted when x range changes via drag
+    x_range_changed = pyqtSignal(float, float)
     
     def __init__(self, channel_name: str, unit: str, color: str, parent=None):
         super().__init__(parent)
@@ -26,29 +32,30 @@ class ChannelPlotWidget(pg.PlotWidget):
         self.unit = unit
         self.color = color
         self.data_line = None
+        self._current_hover_value = None
         
         # Configure plot appearance
         self.setBackground('w')
         self.showGrid(x=True, y=True, alpha=0.3)
-        self.setLabel('left', f'{channel_name}', units=unit)
+        
+        # Set title with larger font for channel name and value
+        self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{channel_name}</span> <span style="font-size: 10pt; color: #666;">({unit})</span>')
+        self.setLabel('left', '', units=unit)
         self.setLabel('bottom', 'Time', units='s')
         
         # Enable mouse interaction
         self.setMouseEnabled(x=True, y=False)
         self.enableAutoRange(axis='y', enable=True)
         
-        # Create crosshair
-        self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen('gray', width=1, style=Qt.PenStyle.DashLine))
-        self.hLine = pg.InfiniteLine(angle=0, movable=False, pen=pg.mkPen('gray', width=1, style=Qt.PenStyle.DashLine))
+        # Create crosshair - vertical line only
+        self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen('#1976D2', width=1, style=Qt.PenStyle.DashLine))
         self.addItem(self.vLine, ignoreBounds=True)
-        self.addItem(self.hLine, ignoreBounds=True)
         
-        # Value label
-        self.value_label = pg.TextItem(anchor=(0, 1), color='k')
-        self.addItem(self.value_label)
+        # Connect mouse click instead of hover for performance
+        self.scene().sigMouseClicked.connect(self.mouse_clicked)
         
-        # Connect mouse movement
-        self.scene().sigMouseMoved.connect(self.mouse_moved)
+        # Connect range change signal
+        self.sigXRangeChanged.connect(self._on_x_range_changed)
         
         # Store data for hover lookup
         self._x_data = None
@@ -69,24 +76,45 @@ class ChannelPlotWidget(pg.PlotWidget):
         """Set the X axis range."""
         self.setXRange(x_min, x_max, padding=0)
     
-    def mouse_moved(self, pos):
-        """Handle mouse movement for crosshair and value display."""
+    def _on_x_range_changed(self, view, range):
+        """Handle X range change from user drag."""
+        self.x_range_changed.emit(range[0], range[1])
+    
+    def mouse_clicked(self, event):
+        """Handle mouse click for crosshair positioning."""
+        pos = event.scenePos()
         if self.sceneBoundingRect().contains(pos):
             mouse_point = self.plotItem.vb.mapSceneToView(pos)
             x = mouse_point.x()
             
             self.vLine.setPos(x)
+            self.update_hover_value(x)
             
-            # Find closest data point
-            if self._x_data is not None and len(self._x_data) > 0:
-                idx = np.searchsorted(self._x_data, x)
-                idx = np.clip(idx, 0, len(self._x_data) - 1)
-                
-                y_val = self._y_data[idx]
-                self.hLine.setPos(y_val)
-                
-                self.value_label.setText(f'{self.channel_name}: {y_val:.2f} {self.unit}')
-                self.value_label.setPos(x, y_val)
+            # Emit signal for synchronized crosshair
+            self.hover_x_changed.emit(x)
+    
+    def update_hover_value(self, x: float):
+        """Update the displayed hover value for given x position."""
+        if self._x_data is not None and len(self._x_data) > 0:
+            idx = np.searchsorted(self._x_data, x)
+            idx = np.clip(idx, 0, len(self._x_data) - 1)
+            
+            y_val = self._y_data[idx]
+            self._current_hover_value = y_val
+            
+            # Update title with current value
+            self.setTitle(
+                f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> '
+                f'<span style="font-size: 10pt; color: #666;">({self.unit})</span> '
+                f'<span style="font-size: 11pt; font-weight: bold; color: #1976D2;">= {y_val:.2f}</span>'
+            )
+            
+            self.vLine.setPos(x)
+    
+    def clear_hover_value(self):
+        """Clear the hover value from title."""
+        self._current_hover_value = None
+        self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> <span style="font-size: 10pt; color: #666;">({self.unit})</span>')
 
 
 class OBD2ChartWidget(QWidget):
@@ -135,7 +163,7 @@ class OBD2ChartWidget(QWidget):
         self.plots_container = QWidget()
         self.plots_layout = QVBoxLayout(self.plots_container)
         self.plots_layout.setContentsMargins(5, 5, 5, 5)
-        self.plots_layout.setSpacing(2)
+        self.plots_layout.setSpacing(15)  # More space between charts
         
         self.scroll_area.setWidget(self.plots_container)
         layout.addWidget(self.scroll_area)
@@ -158,8 +186,10 @@ class OBD2ChartWidget(QWidget):
         self.units = units
         self.display_names = display_names
         
-        # Generate colors
-        self.colors = self._generate_colors(list(channels_data.keys()))
+        # Use single color for all channels in this dataset
+        # A consistent color makes it clear all data is from the same source
+        self.dataset_color = '#1976D2'  # Material Blue 700 - professional, readable
+        self.colors = {ch: self.dataset_color for ch in channels_data.keys()}
         
         # Calculate time range
         self._calculate_time_range()
@@ -170,8 +200,11 @@ class OBD2ChartWidget(QWidget):
         # Create plots
         self._create_plots()
         
-        # Update all plots with data
+        # Update all plots with data and set initial range
         self._update_all_plots()
+        
+        # Force set the initial time range explicitly
+        self.set_time_range(self.min_time, self.max_time)
     
     def _generate_colors(self, channels: List[str]) -> Dict[str, str]:
         """Generate distinct colors for each channel."""
@@ -211,13 +244,22 @@ class OBD2ChartWidget(QWidget):
             color = self.colors.get(channel, '#1f77b4')
             
             plot = ChannelPlotWidget(display_name, unit, color)
-            plot.setMinimumHeight(150)
-            plot.setMaximumHeight(200)
+            plot.setMinimumHeight(180)  # Taller for better title visibility
+            plot.setMaximumHeight(220)
+            
+            # Disable auto-range on X axis - we control it manually
+            plot.enableAutoRange(axis='x', enable=False)
             
             # Link X axis to other plots for synchronized panning
             if self.plots:
                 first_plot = list(self.plots.values())[0]
                 plot.setXLink(first_plot)
+            
+            # Connect hover signal for synchronized crosshair
+            plot.hover_x_changed.connect(self._on_hover_x_changed)
+            
+            # Connect x range change for drag updates
+            plot.x_range_changed.connect(self._on_plot_x_range_changed)
             
             self.plots[channel] = plot
             self.plots_layout.addWidget(plot)
@@ -307,3 +349,18 @@ class OBD2ChartWidget(QWidget):
         """Zoom to a specific center time with given duration."""
         half_duration = duration / 2
         self.set_time_range(center - half_duration, center + half_duration)
+    
+    def _on_hover_x_changed(self, x: float):
+        """Handle hover x change - update all plots' crosshairs and values."""
+        for channel, plot in self.plots.items():
+            if channel in self.visible_channels:
+                plot.update_hover_value(x)
+    
+    def _on_plot_x_range_changed(self, x_min: float, x_max: float):
+        """Handle x range change from plot drag."""
+        # Update internal state
+        self.current_start = max(self.min_time, x_min)
+        self.current_end = min(self.max_time, x_max)
+        
+        # Emit signal to update time navigation inputs
+        self.time_range_changed.emit(self.current_start, self.current_end)

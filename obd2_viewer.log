@@ -253,3 +253,44 @@
 2025-12-11 18:49:44,293 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
 2025-12-11 18:49:44,451 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
 2025-12-11 18:49:47,874 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv
+2025-12-11 19:03:58,589 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 19:03:58,590 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 19:04:01,294 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 19:04:01,534 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 19:04:02,590 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 19:04:19,494 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 19:04:19,519 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 19:04:19,670 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 19:04:23,005 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv
+2025-12-11 19:07:27,629 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 19:07:27,630 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 19:07:30,201 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 19:07:30,427 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 19:07:31,258 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 19:07:49,043 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 19:07:49,074 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 19:07:49,226 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 19:07:52,445 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv
+2025-12-11 19:24:44,388 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 19:24:44,389 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 19:24:47,014 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 19:24:47,245 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 19:24:47,993 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 19:24:55,602 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 19:24:55,629 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 19:24:55,804 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 19:24:59,336 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv
+2025-12-11 19:25:53,331 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 19:25:53,332 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 19:25:56,018 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 19:25:56,267 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 19:25:57,248 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized
+2025-12-11 19:26:06,399 - obd2_viewer.core.multi_channel_parser - INFO - Parsing multi-channel CSV: nov_4_test_data.csv (0.8MB)
+2025-12-11 19:26:06,423 - obd2_viewer.core.multi_channel_parser - INFO - Processing multi-channel data with 29 channels
+2025-12-11 19:26:06,567 - obd2_viewer.core.multi_channel_parser - INFO - Successfully parsed 29 channels
+2025-12-11 19:26:10,045 - obd2_viewer.native.main_window - INFO - Loaded 29 channels from C:/Users/skwis/OneDrive/Documents/Car stuff/Engine Rebuild/data/src/test/nov_4_test_data.csv
+2025-12-11 19:44:01,396 - numexpr.utils - INFO - Note: NumExpr detected 12 cores but "NUMEXPR_MAX_THREADS" not set, so enforcing safe limit of 8.
+2025-12-11 19:44:01,396 - numexpr.utils - INFO - NumExpr defaulting to 8 threads.
+2025-12-11 19:44:04,080 - OpenGL.acceleratesupport - INFO - No OpenGL_accelerate module loaded: No module named 'OpenGL_accelerate'
+2025-12-11 19:44:04,322 - __main__ - INFO - Starting Native OBD2 Data Visualization Tool
+2025-12-11 19:44:05,186 - obd2_viewer.native.main_window - INFO - OBD2 Native Viewer initialized

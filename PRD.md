@@ -93,19 +93,22 @@ A professional web-based tool for importing, processing, and visualizing OBD2 (O
 #### 2.2 Time Navigation Controls
 **Requirements:**
 - Start/end time text boxes
-- Navigation buttons: ±0.1s, ±0.5s, ±1s, ±5s, ±15s, ±1min, ±5min
+- Navigation buttons: ±0.1s, ±0.5s, ±1s, ±5s, ±15s, ±30s, ±1min, ±5min
+- Zoom In/Out buttons (reduce/increase time range by 10%, 5% each side)
+- Zoom In grayed out when time range ≤ 10 seconds (keeps x-axis markers readable)
+- Zoom Out grayed out when already showing full data range
 - Independent time controls per import
 - Equal time window across all imports
 - Synchronized time movement option
 
-**Implementation Status:** ⚠️ Partially Implemented
+**Implementation Status:** ✅ Fully Implemented (Native App)
 **Current Working Components:**
 - ✅ Start/end time text boxes
-- ✅ Center time input
-- ✅ Left/Right 30s navigation buttons
-- ✅ Reset button
-- ❌ Missing granular navigation (±0.1s, ±0.5s, etc.)
-- ❌ No multi-import synchronization
+- ✅ Center time input with Go button
+- ✅ Full granular navigation (±0.1s, ±0.5s, ±1s, ±5s, ±15s, ±30s, ±1min, ±5min)
+- ✅ Reset View button
+- ✅ Zoom In/Out buttons with proper graying when at limits
+- ❌ No multi-import synchronization (future feature)
 
 #### 2.3 Channel Visibility Management
 **Requirements:**
