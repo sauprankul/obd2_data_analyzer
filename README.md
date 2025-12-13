@@ -131,10 +131,9 @@ The parser handles interleaved rows - different channels can have different samp
 
 ### Running the Executable
 
-Download and run:
-```
-run/dist/obd2_analyzer.exe
-```
+1. Download `obd2_analyzer.zip` from the [latest release](https://github.com/sauprankul/obd2_data_analyzer/releases)
+2. Extract the zip
+3. Run `obd2_analyzer.exe`
 
 ### Development Installation
 

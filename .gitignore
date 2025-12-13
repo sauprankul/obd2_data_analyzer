@@ -62,3 +62,8 @@ Thumbs.db
 build/
 *.spec.bak
 
+# Code signing certificate (sensitive!)
+*.pfx
+*.p12
+run/create_cert.ps1
+
