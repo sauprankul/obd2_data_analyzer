@@ -998,14 +998,27 @@ class FilterDialog(QDialog):
         self.mode_hide_btn.setCheckable(True)
         self.mode_show_btn.setChecked(True)
         
-        # Style for toggle buttons
-        toggle_style = """
-            QPushButton { padding: 8px 16px; border: 1px solid #ccc; }
-            QPushButton:checked { background-color: #1976D2; color: white; border: 1px solid #1565C0; }
-            QPushButton:!checked { background-color: #f0f0f0; color: #333; }
+        # Style for toggle buttons - selected has outline, unselected is faded
+        toggle_style_selected = """
+            QPushButton { 
+                padding: 8px 16px; 
+                background-color: #1976D2; 
+                color: white; 
+                border: 2px solid #0D47A1;
+                font-weight: bold;
+            }
         """
-        self.mode_show_btn.setStyleSheet(toggle_style)
-        self.mode_hide_btn.setStyleSheet(toggle_style)
+        toggle_style_unselected = """
+            QPushButton { 
+                padding: 8px 16px; 
+                background-color: #e0e0e0; 
+                color: #999;
+                border: 1px solid #ccc;
+            }
+        """
+        self._toggle_style_selected = toggle_style_selected
+        self._toggle_style_unselected = toggle_style_unselected
+        self._update_mode_button_styles()
         
         # Make them mutually exclusive
         self.mode_show_btn.clicked.connect(lambda: self._set_filter_mode('show'))
@@ -1211,6 +1224,16 @@ class FilterDialog(QDialog):
         else:
             self.mode_show_btn.setChecked(False)
             self.mode_hide_btn.setChecked(True)
+        self._update_mode_button_styles()
+    
+    def _update_mode_button_styles(self):
+        """Update the visual styles of mode buttons based on selection."""
+        if self.mode_show_btn.isChecked():
+            self.mode_show_btn.setStyleSheet(self._toggle_style_selected)
+            self.mode_hide_btn.setStyleSheet(self._toggle_style_unselected)
+        else:
+            self.mode_show_btn.setStyleSheet(self._toggle_style_unselected)
+            self.mode_hide_btn.setStyleSheet(self._toggle_style_selected)
     
     def _create_filter(self):
         """Emit signal to create the filter."""
@@ -1238,6 +1261,25 @@ class FilterDialog(QDialog):
         
         self.filter_created.emit(name, expr, inputs_json, mode, buffer_seconds)
         self.accept()
+
+
+class CreatingChannelDialog(QDialog):
+    """Simple modal dialog showing a spinner while creating a channel/filter."""
+    
+    def __init__(self, message: str, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Please Wait")
+        self.setModal(True)
+        self.setFixedSize(300, 100)
+        self.setWindowFlags(self.windowFlags() & ~Qt.WindowType.WindowCloseButtonHint)
+        
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        
+        label = QLabel(message)
+        label.setStyleSheet("font-size: 12pt;")
+        label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(label)
 
 
 class SidebarWindow(QMainWindow):
@@ -1528,6 +1570,12 @@ class OBD2MainWindow(QMainWindow):
         self.sort_timer.setSingleShot(True)
         self.sort_timer.setInterval(2000)  # 2 seconds
         self.sort_timer.timeout.connect(self._sort_channel_controls)
+        
+        # Debounced zoom button update timer (1 second delay after mouse wheel zoom)
+        self._zoom_button_timer = QTimer()
+        self._zoom_button_timer.setSingleShot(True)
+        self._zoom_button_timer.setInterval(1000)  # 1 second
+        self._zoom_button_timer.timeout.connect(self._update_zoom_buttons)
         
         # Split window mode
         self.sidebar_window: Optional['SidebarWindow'] = None
@@ -2266,7 +2314,7 @@ class OBD2MainWindow(QMainWindow):
             edit_data = {'name': edit_channel, **self.math_channels[edit_channel]}
         
         dialog = MathChannelDialog(list(all_channels), list(all_units), channel_units, edit_data, self)
-        dialog.channel_created.connect(lambda n, e, inputs_json, u: self._create_math_channel(n, e, inputs_json, u, edit_channel))
+        dialog.channel_created.connect(lambda n, e, inputs_json, u: self._create_math_channel_with_spinner(n, e, inputs_json, u, edit_channel))
         dialog.exec()
     
     def _edit_math_channel(self, channel_name: str):
@@ -2509,6 +2557,19 @@ class OBD2MainWindow(QMainWindow):
         if self.filters:
             self._apply_filters()
     
+    def _create_math_channel_with_spinner(self, name: str, expression: str, inputs_json: str, 
+                                           unit: str, replacing: str = None):
+        """Show spinner dialog while creating a math channel."""
+        # Show spinner dialog
+        spinner = CreatingChannelDialog(f"Creating {name}...", self)
+        spinner.show()
+        QApplication.processEvents()  # Force UI update
+        
+        try:
+            self._create_math_channel(name, expression, inputs_json, unit, replacing)
+        finally:
+            spinner.close()
+    
     def _show_filter_dialog(self, edit_filter: str = None):
         """Show dialog to create or edit a filter."""
         if not self.imports:
@@ -2530,7 +2591,7 @@ class OBD2MainWindow(QMainWindow):
             edit_data = {'name': edit_filter, **self.filters[edit_filter]}
         
         dialog = FilterDialog(list(all_channels), channel_units, edit_data, self)
-        dialog.filter_created.connect(lambda n, e, inputs_json, m, b: self._create_filter(n, e, inputs_json, m, b, edit_filter))
+        dialog.filter_created.connect(lambda n, e, inputs_json, m, b: self._create_filter_with_spinner(n, e, inputs_json, m, b, edit_filter))
         dialog.exec()
     
     def _edit_filter(self, filter_name: str):
@@ -2587,6 +2648,19 @@ class OBD2MainWindow(QMainWindow):
         self._apply_filters()
         
         self.statusbar.showMessage(f"{'Updated' if replacing else 'Created'} filter: {name}", 5000)
+    
+    def _create_filter_with_spinner(self, name: str, expression: str, inputs_json: str, 
+                                     mode: str, buffer_seconds: float, replacing: str = None):
+        """Show spinner dialog while creating a filter."""
+        # Show spinner dialog
+        spinner = CreatingChannelDialog(f"Creating {name}...", self)
+        spinner.show()
+        QApplication.processEvents()  # Force UI update
+        
+        try:
+            self._create_filter(name, expression, inputs_json, mode, buffer_seconds, replacing)
+        finally:
+            spinner.close()
     
     def _remove_filter_control(self, filter_name: str):
         """Remove a filter control widget from the UI."""
@@ -3232,6 +3306,9 @@ class OBD2MainWindow(QMainWindow):
         nav.center_input.blockSignals(False)
         
         self.time_label.setText(f"{start:.1f}s - {end:.1f}s")
+        
+        # Debounced zoom button update (restart timer on each change)
+        self._zoom_button_timer.start()
     
     def _show_about(self):
         """Show about dialog."""
@@ -3260,10 +3337,14 @@ class OBD2MainWindow(QMainWindow):
         self.settings.setValue("recent_files", self.recent_files)
     
     def _add_to_recent(self, path: str):
-        """Add path to recent files."""
-        if path in self.recent_files:
-            self.recent_files.remove(path)
-        self.recent_files.insert(0, path)
+        """Add path to recent files using absolute paths for deduplication."""
+        # Normalize to absolute path for consistent deduplication
+        abs_path = str(Path(path).resolve())
+        
+        # Remove any existing entry with the same absolute path
+        self.recent_files = [p for p in self.recent_files if str(Path(p).resolve()) != abs_path]
+        
+        self.recent_files.insert(0, abs_path)
         self.recent_files = self.recent_files[:10]  # Keep only 10
         self._save_recent_files()
         self._update_recent_menu()
