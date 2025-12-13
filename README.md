@@ -31,6 +31,7 @@ A Windows application for visualizing and comparing CSV data. Built with PyQt6 a
 ### Time Navigation
 
 Located in the sidebar:
+
 - **Start/End Time Inputs**: Directly set the visible time range
 - **Center Time + Go**: Jump to a specific time
 - **Navigation Buttons**: ±0.1s, ±0.5s, ±1s, ±5s, ±15s, ±30s, ±1min, ±5min
@@ -42,6 +43,7 @@ Located in the sidebar:
 ### Channel Visibility
 
 In the sidebar below time navigation:
+
 - **Per-Import Checkboxes**: Each channel has checkboxes for each loaded CSV
 - **Show All / Hide All**: Quick toggle buttons
 - **Dynamic Sorting**: Selected channels appear at top, sorted by unit then alphabetically
@@ -50,6 +52,7 @@ In the sidebar below time navigation:
 ### Import Management
 
 In the "Imports" section of the sidebar:
+
 - **Color Legend**: Each import has a distinct color (click the color dot to change it)
 - **Duration Display**: Shows total time span of each import
 - **Time Offset**: Shows offset relative to base import (first loaded)
@@ -58,6 +61,7 @@ In the "Imports" section of the sidebar:
 ### Time Synchronization
 
 When comparing multiple CSV files:
+
 - **Base Import**: First loaded file is the reference (offset = 0)
 - **Synchronize Dialog**: Click "Sync" button next to any additional import
   - Adjust time offset with ±0.1s to ±5min buttons
@@ -67,6 +71,7 @@ When comparing multiple CSV files:
 ### Math Channels
 
 Create calculated channels from existing data:
+
 - **Create Math Channel Button**: Opens the math channel dialog
 - **Up to 5 Inputs**: Select channels A through E from dropdowns
 - **Expression Field**: Python-style math expressions like `(A/0.45) * 14.7` or `A + B * C`
@@ -75,6 +80,7 @@ Create calculated channels from existing data:
 - **Edit Button**: Modify existing math channels
 
 **Available Functions:**
+
 - Basic: `abs`, `min`, `max`, `sqrt`, `log`, `log10`, `exp`, `pow`
 - Trig: `sin`, `cos`, `tan`
 - Rounding: `floor`, `ceil`, `round`
@@ -88,10 +94,11 @@ Create calculated channels from existing data:
 ### Data Filters
 
 Show or hide data based on conditions:
+
 - **Create Filter Button**: Opens filter dialog
 - **Filter Name**: Required identifier
 - **Boolean Expression**: Must evaluate to True/False (e.g., `A > 100`)
-- **Show/Hide Mode**: 
+- **Show/Hide Mode**:
   - Show (👁): Display only matching data
   - Hide (🚫): Hide matching data
 - **Time Buffer**: ±0.1s to ±10min around each match point
@@ -109,14 +116,16 @@ Show or hide data based on conditions:
 
 The tool expects semicolon-delimited CSV files with these columns:
 
-| Column | Required | Description |
-|--------|----------|-------------|
-| SECONDS | Yes | Timestamp in seconds |
-| VALUE | Yes | Sensor reading |
-| UNITS | Yes | Unit of measurement (e.g., "rpm", "°F") |
-| PID | Yes | Channel/sensor name |
+
+| Column  | Required | Description                              |
+| --------- | ---------- | ------------------------------------------ |
+| SECONDS | Yes      | Timestamp in seconds                     |
+| VALUE   | Yes      | Sensor reading                           |
+| UNITS   | Yes      | Unit of measurement (e.g., "rpm", "°F") |
+| PID     | Yes      | Channel/sensor name                      |
 
 **Example (Car Scanner format):**
+
 ```csv
 SECONDS;VALUE;UNITS;PID
 0.0;800;rpm;Engine RPM
@@ -131,25 +140,26 @@ The parser handles interleaved rows - different channels can have different samp
 
 ### Running the Executable
 
-1. Download `obd2_analyzer.zip` from the [latest release](https://github.com/sauprankul/obd2_data_analyzer/releases)
+1. Ask Saurabh for obd2_analyzer.zip
 2. Extract the zip
 3. Run `obd2_analyzer.exe`
 
-### Development Installation
+### Developer Installation
 
 1. Create and activate a virtual environment:
+
    ```bash
    python -m venv venv
    venv\Scripts\activate  # Windows
    # source venv/bin/activate  # Linux/Mac
    ```
-
 2. Install dependencies:
+
    ```bash
    pip install -r requirements.txt
    ```
-
 3. Run the application:
+
    ```bash
    python src/obd2_native.py
    ```
@@ -157,11 +167,13 @@ The parser handles interleaved rows - different channels can have different samp
 ### Building the Executable
 
 Run the build script from the repo root:
+
 ```bash
 run/build_exe.bat
 ```
 
 This will:
+
 1. Install PyInstaller if needed
 2. Convert `logo.png` to `run/logo.ico`
 3. Build the executable using `run/obd2_analyzer.spec`
@@ -211,6 +223,7 @@ pytest src/test/ -v
 **Root Cause:** PyQt6 6.10.1 has DLL loading compatibility issues with PyInstaller on Windows. Additionally, `shiboken2` (PySide2's Qt5 binding) was being bundled and conflicting with PyQt6.
 
 **Solution:**
+
 1. Downgraded PyQt6 to 6.5.2
 2. Added exclusions for PySide2, shiboken2, PySide6, shiboken6, PyQt5 in spec file
 3. Pinned PyQt6 version in requirements.txt to `>=6.5.0,<6.6.0`
