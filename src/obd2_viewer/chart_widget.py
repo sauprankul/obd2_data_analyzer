@@ -228,6 +228,9 @@ class ChannelPlotWidget(pg.PlotWidget):
         if self.data_lines[import_index]:
             pen = pg.mkPen(color=color, width=2)
             self.data_lines[import_index].setPen(pen)
+        
+        # Refresh title to update value colors
+        self._refresh_title()
     
     def set_x_range(self, x_min: float, x_max: float):
         """Set the X axis range."""
@@ -303,6 +306,24 @@ class ChannelPlotWidget(pg.PlotWidget):
         """Clear the hover value from title."""
         self._current_hover_values = [None] * len(self.import_data)
         self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> <span style="font-size: 10pt; color: #666;">({self.unit})</span>')
+    
+    def _refresh_title(self):
+        """Refresh the title with current hover values and updated colors."""
+        value_parts = []
+        
+        for i, val in enumerate(self._current_hover_values):
+            if val is not None:
+                color = self.import_colors[i] if i < len(self.import_colors) else '#1976D2'
+                value_parts.append(f'<span style="color: {color}; font-weight: bold;">{val:.2f}</span>')
+        
+        if value_parts:
+            values_str = ' | '.join(value_parts)
+            self.setTitle(
+                f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> '
+                f'<span style="font-size: 10pt; color: #666;">({self.unit})</span> = {values_str}'
+            )
+        else:
+            self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{self.channel_name}</span> <span style="font-size: 10pt; color: #666;">({self.unit})</span>')
 
 
 class OBD2ChartWidget(QWidget):
@@ -314,6 +335,7 @@ class OBD2ChartWidget(QWidget):
     """
     
     time_range_changed = pyqtSignal(float, float)
+    crosshair_moved = pyqtSignal(float)  # Emits current crosshair x position
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -336,6 +358,9 @@ class OBD2ChartWidget(QWidget):
         
         # Flag to prevent feedback during programmatic range changes
         self._updating_range = False
+        
+        # Last clicked position for zoom centering
+        self._last_click_x: Optional[float] = None
         
         # Plot height settings
         self._base_plot_height = 200  # Base height in pixels
@@ -645,6 +670,8 @@ class OBD2ChartWidget(QWidget):
         """Handle hover x change - update all plots' crosshairs and values."""
         for plot in self.plots.values():
             plot.update_hover_value(x)
+        # Emit signal for status bar update
+        self.crosshair_moved.emit(x)
     
     def _on_plot_x_range_changed(self, x_min: float, x_max: float):
         """Handle x range change from plot drag."""
@@ -658,6 +685,9 @@ class OBD2ChartWidget(QWidget):
     
     def _on_click_to_center(self, x: float):
         """Handle click to center - shift view so clicked position is at center."""
+        # Store last clicked position for zoom centering
+        self._last_click_x = x
+        
         duration = self.current_end - self.current_start
         half_duration = duration / 2
         
@@ -673,6 +703,21 @@ class OBD2ChartWidget(QWidget):
             new_start = new_end - duration
         
         self.set_time_range(new_start, new_end)
+    
+    def get_zoom_center(self) -> float:
+        """Get the center point for zoom operations.
+        
+        Returns the last clicked position if available and within current view,
+        otherwise returns the current view center.
+        """
+        view_center = (self.current_start + self.current_end) / 2
+        
+        if self._last_click_x is not None:
+            # Use last click if it's within the current view
+            if self.current_start <= self._last_click_x <= self.current_end:
+                return self._last_click_x
+        
+        return view_center
     
     def make_plots_taller(self):
         """Increase plot heights by 5%."""

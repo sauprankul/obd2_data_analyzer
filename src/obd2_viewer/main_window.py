@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QStackedWidget, QColorDialog
 )
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal, QTimer
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence, QColor
 
 from .chart_widget import OBD2ChartWidget
 from .data_types import ImportData, FileLoaderThread, IMPORT_COLORS
@@ -90,7 +90,7 @@ class OBD2MainWindow(QMainWindow):
         self._zoom_button_timer = QTimer()
         self._zoom_button_timer.setSingleShot(True)
         self._zoom_button_timer.setInterval(1000)  # 1 second
-        self._zoom_button_timer.timeout.connect(self._update_zoom_buttons)
+        self._zoom_button_timer.timeout.connect(self._update_zoom_slider)
         
         # Split window mode
         self.sidebar_window: Optional['SidebarWindow'] = None
@@ -343,6 +343,9 @@ class OBD2MainWindow(QMainWindow):
         self.time_label = QLabel("")
         self.statusbar.addPermanentWidget(self.time_label)
         
+        self.current_time_label = QLabel("")
+        self.statusbar.addPermanentWidget(self.current_time_label)
+        
         self.channel_label = QLabel("")
         self.statusbar.addPermanentWidget(self.channel_label)
     
@@ -375,9 +378,8 @@ class OBD2MainWindow(QMainWindow):
         nav.btn_reset.clicked.connect(self._reset_time_range)
         nav.go_to_center_btn.clicked.connect(self._go_to_center)
         
-        # Zoom buttons
-        nav.btn_zoom_in.clicked.connect(self._zoom_in)
-        nav.btn_zoom_out.clicked.connect(self._zoom_out)
+        # Zoom slider
+        nav.zoom_slider.valueChanged.connect(self._on_zoom_slider_changed)
         
         nav.start_input.valueChanged.connect(self._on_time_input_changed)
         nav.end_input.valueChanged.connect(self._on_time_input_changed)
@@ -389,6 +391,9 @@ class OBD2MainWindow(QMainWindow):
         
         # Chart time range changes
         self.chart_widget.time_range_changed.connect(self._on_chart_time_changed)
+        
+        # Crosshair position changes
+        self.chart_widget.crosshair_moved.connect(self._on_crosshair_moved)
     
     def _make_plots_taller(self):
         """Make all plots taller by 5%."""
@@ -586,8 +591,8 @@ class OBD2MainWindow(QMainWindow):
         # Update time navigation inputs
         self._update_time_inputs()
         
-        # Update zoom button states
-        self._update_zoom_buttons()
+        # Update zoom slider position
+        self._update_zoom_slider()
         
         # Update status
         total_channels = len(set().union(*[set(imp.channels_data.keys()) for imp in self.imports]))
@@ -1546,8 +1551,8 @@ class OBD2MainWindow(QMainWindow):
         # Update time navigation inputs
         self._update_time_inputs()
         
-        # Update zoom button states
-        self._update_zoom_buttons()
+        # Update zoom slider position
+        self._update_zoom_slider()
         
         # Update status
         num_channels = len(channels_data)
@@ -1666,7 +1671,7 @@ class OBD2MainWindow(QMainWindow):
         """Reset to full time range."""
         self.chart_widget.reset_time_range()
         self._update_time_inputs()
-        self._update_zoom_buttons()
+        self._update_zoom_slider()
     
     def _toggle_split_window(self, checked: bool):
         """Toggle split window mode - sidebar in separate window."""
@@ -1717,45 +1722,36 @@ class OBD2MainWindow(QMainWindow):
         
         self.is_split_mode = False
     
-    def _zoom_in(self):
-        """Zoom in by reducing time range by 10% (5% each side)."""
+    def _on_zoom_slider_changed(self, value: int):
+        """Handle zoom slider value change.
+        
+        Slider value 0 = fully zoomed out (full data range)
+        Slider value 100 = fully zoomed in (min_duration seconds visible)
+        
+        Uses exponential scaling for natural zoom feel.
+        Centers zoom on last clicked position if available, otherwise view center.
+        """
         chart = self.chart_widget
-        duration = chart.current_end - chart.current_start
-        center = (chart.current_start + chart.current_end) / 2
         
-        # Reduce duration by 10% (5% each side)
-        new_duration = duration * 0.9
-        
-        # Minimum duration check (approximately 10 seconds to keep markers readable)
-        min_duration = 10.0
-        if new_duration < min_duration:
-            new_duration = min_duration
-        
-        new_start = center - new_duration / 2
-        new_end = center + new_duration / 2
-        
-        chart.set_time_range(new_start, new_end)
-        self._update_time_inputs()
-        self._update_zoom_buttons()
-    
-    def _zoom_out(self):
-        """Zoom out by increasing time range by 10% (5% each side)."""
-        chart = self.chart_widget
-        duration = chart.current_end - chart.current_start
-        center = (chart.current_start + chart.current_end) / 2
-        
-        # Increase duration by ~11% (inverse of 0.9)
-        new_duration = duration / 0.9
-        
-        # Maximum is full data range
         max_duration = chart.max_time - chart.min_time
-        if new_duration > max_duration:
-            new_duration = max_duration
+        min_duration = 10.0  # Minimum zoom level (10 seconds)
+        
+        if max_duration <= min_duration:
+            return
+        
+        # Exponential interpolation: duration = max * (min/max)^(value/100)
+        # At value=0: duration = max
+        # At value=100: duration = min
+        ratio = value / 100.0
+        new_duration = max_duration * ((min_duration / max_duration) ** ratio)
+        
+        # Use last clicked position as center if available, otherwise view center
+        center = chart.get_zoom_center()
         
         new_start = center - new_duration / 2
         new_end = center + new_duration / 2
         
-        # Clamp to data bounds
+        # Clamp to data bounds while preserving duration
         if new_start < chart.min_time:
             new_start = chart.min_time
             new_end = new_start + new_duration
@@ -1763,32 +1759,34 @@ class OBD2MainWindow(QMainWindow):
             new_end = chart.max_time
             new_start = new_end - new_duration
         
+        # Ensure we don't go below min_time after adjustment
+        if new_start < chart.min_time:
+            new_start = chart.min_time
+        
         chart.set_time_range(new_start, new_end)
         self._update_time_inputs()
-        self._update_zoom_buttons()
     
-    def _update_zoom_buttons(self):
-        """Update zoom button enabled states."""
+    def _update_zoom_slider(self):
+        """Update zoom slider position to match current zoom level."""
         chart = self.chart_widget
         nav = self.time_nav
         
         current_duration = chart.current_end - chart.current_start
         max_duration = chart.max_time - chart.min_time
-        min_duration = 10.0  # Minimum zoom level
+        min_duration = 10.0
         
-        # Consistent button styles
-        btn_style_enabled = "background-color: #616161; color: white; font-weight: bold;"
-        btn_style_disabled = "background-color: #BDBDBD; color: #757575;"
+        if max_duration <= min_duration or current_duration <= 0:
+            return
         
-        # Disable zoom in if at minimum duration
-        at_min_zoom = current_duration <= min_duration
-        nav.btn_zoom_in.setEnabled(not at_min_zoom)
-        nav.btn_zoom_in.setStyleSheet(btn_style_disabled if at_min_zoom else btn_style_enabled)
+        # Inverse of exponential: value = 100 * log(duration/max) / log(min/max)
+        import math
+        ratio = math.log(current_duration / max_duration) / math.log(min_duration / max_duration)
+        slider_value = int(ratio * 100)
+        slider_value = max(0, min(100, slider_value))
         
-        # Disable zoom out if at maximum duration (full range)
-        at_max_zoom = current_duration >= max_duration * 0.99  # 99% tolerance
-        nav.btn_zoom_out.setEnabled(not at_max_zoom)
-        nav.btn_zoom_out.setStyleSheet(btn_style_disabled if at_max_zoom else btn_style_enabled)
+        nav.zoom_slider.blockSignals(True)
+        nav.zoom_slider.setValue(slider_value)
+        nav.zoom_slider.blockSignals(False)
     
     def _go_to_center(self):
         """Go to the center time specified in input."""
@@ -1824,6 +1822,10 @@ class OBD2MainWindow(QMainWindow):
         
         # Debounced zoom button update (restart timer on each change)
         self._zoom_button_timer.start()
+    
+    def _on_crosshair_moved(self, x: float):
+        """Handle crosshair position change - update status bar."""
+        self.current_time_label.setText(f"Current: {x:.2f}s")
     
     def _show_about(self):
         """Show about dialog."""

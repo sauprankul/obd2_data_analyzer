@@ -7,7 +7,7 @@ from typing import List, TYPE_CHECKING
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox,
-    QListWidget, QListWidgetItem, QDoubleSpinBox, QMainWindow
+    QListWidget, QListWidgetItem, QDoubleSpinBox, QMainWindow, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -416,16 +416,32 @@ class TimeNavigationWidget(QWidget):
         
         layout.addLayout(nav_layout)
         
+        # Zoom slider: left = zoomed out (full range), right = zoomed in (1s per tick)
         zoom_layout = QHBoxLayout()
-        btn_style = "background-color: #616161; color: white; font-weight: bold;"
-        self.btn_zoom_in = QPushButton("🔍+ Zoom In")
-        self.btn_zoom_out = QPushButton("🔍- Zoom Out")
+        zoom_layout.addWidget(QLabel("🔍-"))
         
-        self.btn_zoom_in.setStyleSheet(btn_style)
-        self.btn_zoom_out.setStyleSheet(btn_style)
+        self.zoom_slider = QSlider(Qt.Orientation.Horizontal)
+        self.zoom_slider.setMinimum(0)
+        self.zoom_slider.setMaximum(100)
+        self.zoom_slider.setValue(0)  # Start fully zoomed out
+        self.zoom_slider.setFixedHeight(24)
+        self.zoom_slider.setStyleSheet("""
+            QSlider::groove:horizontal {
+                border: 1px solid #999;
+                height: 8px;
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #616161, stop:1 #1976D2);
+                border-radius: 4px;
+            }
+            QSlider::handle:horizontal {
+                background: white;
+                border: 2px solid #1976D2;
+                width: 16px;
+                margin: -5px 0;
+                border-radius: 8px;
+            }
+        """)
+        zoom_layout.addWidget(self.zoom_slider, 1)
         
-        for btn in [self.btn_zoom_in, self.btn_zoom_out]:
-            btn.setFixedHeight(32)
-            zoom_layout.addWidget(btn)
+        zoom_layout.addWidget(QLabel("🔍+"))
         
         layout.addLayout(zoom_layout)

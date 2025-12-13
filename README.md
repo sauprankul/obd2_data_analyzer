@@ -35,9 +35,9 @@ Located in the sidebar:
 - **Start/End Time Inputs**: Directly set the visible time range
 - **Center Time + Go**: Jump to a specific time
 - **Navigation Buttons**: ±0.1s, ±0.5s, ±1s, ±5s, ±15s, ±30s, ±1min, ±5min
-- **Zoom In/Out**: Reduce/increase time range by 10% (5% each side)
-  - Zoom In disabled when range ≤ 10 seconds
-  - Zoom Out disabled when showing full data range
+- **Zoom Slider**: Drag left to zoom out (full range), right to zoom in (minimum 10 seconds)
+  - Uses exponential scaling for natural zoom feel
+  - Zooms centered on last clicked position (if within view), otherwise view center
 - **Reset View**: Red button in center returns to full data range
 
 ### Channel Visibility
@@ -189,9 +189,16 @@ src/
     ├── core/                   # Core data processing
     │   ├── data_loader.py      # CSV file loading
     │   └── multi_channel_parser.py  # Multi-channel CSV parsing
-    └── native/                 # Native Windows GUI
-        ├── main_window.py      # Main application window
-        └── chart_widget.py     # PyQtGraph chart components
+    ├── dialogs/                # Dialog windows
+    │   ├── loading_dialog.py   # Loading spinner
+    │   ├── synchronize_dialog.py  # Time sync dialog
+    │   ├── math_channel_dialog.py # Math channel creation
+    │   ├── filter_dialog.py    # Filter creation
+    │   └── expression_helpers.py  # Shared expression evaluation
+    ├── widgets.py              # Reusable UI components
+    ├── data_types.py           # Data structures (ImportData, etc.)
+    ├── main_window.py          # Main application window
+    └── chart_widget.py         # PyQtGraph chart components
 ```
 
 ## Testing
