@@ -297,6 +297,8 @@ class ViewManager:
                 mw.imports[i].color = file_info['color']
                 mw.imports[i].time_offset = file_info['time_offset']
                 mw.chart_widget.update_import_color(i, file_info['color'])
+                mw.chart_widget.update_import_offset(i, file_info['time_offset'])
+                mw.import_legend.update_offset(i, file_info['time_offset'])
         
         # Restore math channels
         for mc in view.math_channels:
