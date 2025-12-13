@@ -569,6 +569,10 @@ class OBD2MainWindow(QMainWindow):
         self._add_to_recent(file_path)
         self._show_viz()
         
+        # Process pending events to ensure charts are fully rendered before closing spinner
+        from PyQt6.QtWidgets import QApplication
+        QApplication.processEvents()
+        
         if self._loading_dialog:
             self._loading_dialog.close()
             self._loading_dialog = None

@@ -48,7 +48,10 @@ class ChannelPlotWidget(pg.PlotWidget):
         # Set title with larger font for channel name and value
         self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{channel_name}</span> <span style="font-size: 10pt; color: #666;">({unit})</span>')
         self.setLabel('left', '', units=unit)
-        self.setLabel('bottom', 'Time', units='s')
+        self.setLabel('bottom', 'Time (s)') # don't use units='s' so we avoid SI prefixes
+        
+        # Disable SI prefix scaling on X axis (no kiloseconds)
+        self.getAxis('bottom').enableAutoSIPrefix(False)
         
         # Enable mouse interaction
         self.setMouseEnabled(x=True, y=False)
