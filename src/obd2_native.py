@@ -48,8 +48,8 @@ def main():
         from PyQt6.QtCore import Qt
         from PyQt6.QtGui import QFont, QIcon
         
-        # Import our native window
-        from obd2_viewer.native.main_window import OBD2MainWindow
+        # Import main window
+        from obd2_viewer.main_window import OBD2MainWindow
         
         logger.info("Starting Native OBD2 Data Visualization Tool")
         

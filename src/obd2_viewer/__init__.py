@@ -1,19 +1,11 @@
-#!/usr/bin/env python3
 """
-OBD2 Data Visualization Tool
+Native Windows OBD2 Viewer using PyQt6 and PyQtGraph.
 
-A native Windows application for visualizing and comparing OBD2 (On-Board Diagnostics) 
-CSV data from vehicles. Uses PyQt6 for the UI and PyQtGraph for high-performance
-chart rendering.
+This module provides a high-performance native Windows application
+for visualizing OBD2 data without any browser dependencies.
 """
 
-from .core.data_loader import OBDDataLoader
-from .core.data_processor import OBDDataProcessor
+from .main_window import OBD2MainWindow
+from .chart_widget import OBD2ChartWidget
 
-__version__ = "2.0.0"
-__author__ = "OBD2 Data Visualization Team"
-
-__all__ = [
-    'OBDDataLoader',
-    'OBDDataProcessor',
-]
+__all__ = ['OBD2MainWindow', 'OBD2ChartWidget']
