@@ -44,10 +44,12 @@ Located in the sidebar:
 
 In the sidebar below time navigation:
 
-- **Per-Import Checkboxes**: Each channel has checkboxes for each loaded CSV
-- **Show All / Hide All**: Quick toggle buttons
-- **Dynamic Sorting**: Selected channels appear at top, sorted by unit then alphabetically
-- **Color Indicators**: Small colored dot shows which import each checkbox controls
+- **Chart Checkbox**: Single checkbox to show/hide the entire chart (determines Shown vs Hidden section)
+- **Import Dot Buttons**: Colored circles next to each channel - click to toggle individual import lines
+  - Solid circle = import line visible
+  - Hollow ring = import line hidden
+- **Show All / Hide All**: Quick toggle buttons for all channels
+- **Dynamic Sorting**: Shown channels appear at top, sorted by unit then alphabetically
 
 ### Import Management
 
@@ -117,16 +119,20 @@ Show or hide data based on conditions:
 Save and restore complete analysis sessions:
 
 - **Save View**: File → Save View (Ctrl+S) to save current state with a name
+  - Pre-fills name if re-saving an existing view
 - **Home Screen**: Saved views appear on the right side of the home screen
-- **Double-click**: Open a saved view to restore the session
-- **Auto-prompt**: When closing or opening new files, you'll be prompted to save
+  - Double-click or select and click "Open Selected" to load
+  - Delete button (🗑) next to each view for quick removal
+  - "Delete All" button to clear all saved views
+- **Auto-prompt**: When closing or opening new files, you'll be prompted to save (skipped if no changes)
 
 **What's saved in a view:**
 - CSV file paths (with relocation dialog if files move)
 - Import colors and time offsets
 - Math channels and filters
-- Channel visibility settings
+- Chart visibility (shown/hidden) and import line visibility per channel
 - Time range and zoom level
+- Graph heights (taller/shorter setting)
 - Split window mode state
 
 **Storage location:** `Documents/OBD2Analyzer/views/`
