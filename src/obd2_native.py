@@ -67,10 +67,12 @@ def main():
         app.setFont(font)
         
         # Set application icon (for taskbar)
-        icon_path = Path(__file__).parent.parent / "logo.png"
         if getattr(sys, 'frozen', False):
-            # Running as compiled exe - logo.png is in parent folder (project root)
-            icon_path = Path(sys.executable).parent.parent / "logo.png"
+            # Running as compiled exe - logo.ico is bundled in same folder as exe
+            icon_path = Path(sys.executable).parent / "logo.ico"
+        else:
+            # Running from source - use logo.png from project root
+            icon_path = Path(__file__).parent.parent / "logo.png"
         if icon_path.exists():
             app.setWindowIcon(QIcon(str(icon_path)))
         

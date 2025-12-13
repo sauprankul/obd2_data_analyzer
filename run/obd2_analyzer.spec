@@ -75,6 +75,8 @@ a = Analysis(
     datas=[
         # Include loading.gif for the spinner animation
         (os.path.join(project_root, 'src', 'obd2_viewer', 'native', 'loading.gif'), 'obd2_viewer/native'),
+        # Include logo.ico for taskbar icon
+        (os.path.join(project_root, 'run', 'logo.ico'), '.'),
     ],
     hiddenimports=[
         'PyQt6',
