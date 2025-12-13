@@ -1,0 +1,6 @@
+the app should make an OBD2Analyzer folder in the user's Documents folder (whatever is the canonical way to grab that in windows), and that should contain 1 json and 1 subfolder. 1 json for recent files, 1 folder for saved views. Each saved view json should contain
+
+- CSV file absolute paths. if a saved view cannot access a certain CSV anymore, it should allow you to individually locate each missing CSV - this should be a special modal.
+- Colors of imports
+- offsets of imports
+- 

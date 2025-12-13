@@ -7,6 +7,8 @@ from .synchronize_dialog import SynchronizeDialog
 from .math_channel_dialog import MathChannelDialog
 from .filter_dialog import FilterDialog
 from .creating_channel_dialog import CreatingChannelDialog
+from .save_view_dialog import SaveViewDialog
+from .relocate_files_dialog import RelocateFilesDialog
 
 # Expression evaluation helpers (used by main_window for channel creation)
 from .expression_helpers import (
@@ -21,6 +23,8 @@ __all__ = [
     'MathChannelDialog',
     'FilterDialog',
     'CreatingChannelDialog',
+    'SaveViewDialog',
+    'RelocateFilesDialog',
     'EXPRESSION_HELP_TEXT',
     'get_math_functions',
     'get_statistical_functions',

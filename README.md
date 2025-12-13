@@ -112,6 +112,25 @@ Show or hide data based on conditions:
 - **Split Window Mode**: View menu → Detach sidebar to separate window (useful for dual monitors)
 - **Persistence**: Window size, position, and splitter ratio saved between sessions
 
+### Saved Views
+
+Save and restore complete analysis sessions:
+
+- **Save View**: File → Save View (Ctrl+S) to save current state with a name
+- **Home Screen**: Saved views appear on the right side of the home screen
+- **Double-click**: Open a saved view to restore the session
+- **Auto-prompt**: When closing or opening new files, you'll be prompted to save
+
+**What's saved in a view:**
+- CSV file paths (with relocation dialog if files move)
+- Import colors and time offsets
+- Math channels and filters
+- Channel visibility settings
+- Time range and zoom level
+- Split window mode state
+
+**Storage location:** `Documents/OBD2Analyzer/views/`
+
 ## Data Format
 
 The tool expects semicolon-delimited CSV files with these columns:
@@ -234,6 +253,18 @@ pytest src/test/ -v
 1. Downgraded PyQt6 to 6.5.2
 2. Added exclusions for PySide2, shiboken2, PySide6, shiboken6, PyQt5 in spec file
 3. Pinned PyQt6 version in requirements.txt to `>=6.5.0,<6.6.0`
+
+### Saved View Loading Async Issue (Dec 2025)
+
+**Issue:** "No files could be loaded from this view" error and app hanging when loading a saved view
+
+**Root Cause:** `_load_file()` uses a background thread and returns immediately. The view manager was checking `mw.imports` and trying to apply colors/offsets before files finished loading, resulting in empty imports list.
+
+**Solution:** 
+1. Refactored `load_saved_view` to queue files using main window's existing queue system
+2. Added `_on_view_files_loaded` callback that runs after all files finish loading
+3. Updated `_load_next_queued_file` to call the callback when queue empties
+4. Added null checks for `_loading_dialog` since saved view loading doesn't create one
 
 ### Frontend Callback Failure (Dec 2024)
 

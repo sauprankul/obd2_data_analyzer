@@ -15,7 +15,7 @@ from PyQt6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QSplitter,
     QFileDialog, QMessageBox, QScrollArea, QFrame, QLabel,
     QPushButton, QGroupBox, QStatusBar, QApplication, QSizePolicy,
-    QStackedWidget, QColorDialog
+    QStackedWidget, QColorDialog, QCheckBox
 )
 from PyQt6.QtCore import Qt, QSettings, pyqtSignal, QTimer
 from PyQt6.QtGui import QAction, QKeySequence, QColor
@@ -30,6 +30,8 @@ from .dialogs import (
     LoadingDialog, SynchronizeDialog, MathChannelDialog, FilterDialog,
     CreatingChannelDialog, get_math_functions, get_statistical_functions
 )
+from .app_data import load_recent_files, save_recent_files, list_saved_views
+from .view_manager import ViewManager
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +98,9 @@ class OBD2MainWindow(QMainWindow):
         self.sidebar_window: Optional['SidebarWindow'] = None
         self.is_split_mode = False
         
+        # View manager for save/load
+        self.view_manager = ViewManager(self)
+        
         # Setup UI
         self._setup_ui()
         self._setup_menu()
@@ -129,6 +134,9 @@ class OBD2MainWindow(QMainWindow):
         self.home_widget.open_files_requested.connect(self._load_multiple_files)
         self.home_widget.open_new_requested.connect(self._open_file_dialog)
         self.home_widget.clear_history_requested.connect(self.clear_recent_files)
+        self.home_widget.open_view_requested.connect(self._load_saved_view)
+        self.home_widget.delete_view_requested.connect(self._delete_saved_view)
+        self.home_widget.delete_all_views_requested.connect(self._delete_all_saved_views)
         self.stacked_widget.addWidget(self.home_widget)
         
         # Visualization screen (index 1)
@@ -249,6 +257,7 @@ class OBD2MainWindow(QMainWindow):
     def _show_home(self):
         """Show the home screen."""
         self.home_widget.update_past_imports(self.recent_files)
+        self.home_widget.update_saved_views(list_saved_views())
         self.stacked_widget.setCurrentIndex(0)
     
     def _show_viz(self):
@@ -284,6 +293,16 @@ class OBD2MainWindow(QMainWindow):
         # Recent files submenu
         self.recent_menu = file_menu.addMenu("Recent Files")
         self._update_recent_menu()
+        
+        file_menu.addSeparator()
+        
+        # Save/Load view actions
+        save_view_action = QAction("&Save View...", self)
+        save_view_action.setShortcut("Ctrl+S")
+        save_view_action.setShortcutContext(Qt.ShortcutContext.ApplicationShortcut)
+        save_view_action.triggered.connect(self._save_view_dialog)
+        file_menu.addAction(save_view_action)
+        self.addAction(save_view_action)  # Enable shortcut globally
         
         file_menu.addSeparator()
         
@@ -433,6 +452,11 @@ class OBD2MainWindow(QMainWindow):
     def _load_next_queued_file(self):
         """Load the next file from the queue."""
         if not hasattr(self, '_pending_files_queue') or not self._pending_files_queue:
+            # Queue is empty - call view load callback if set
+            if hasattr(self, '_view_load_callback') and self._view_load_callback:
+                callback = self._view_load_callback
+                self._view_load_callback = None
+                callback()
             return
         
         file_path = self._pending_files_queue.pop(0)
@@ -532,8 +556,9 @@ class OBD2MainWindow(QMainWindow):
         self._add_to_recent(file_path)
         self._show_viz()
         
-        self._loading_dialog.close()
-        self._loading_dialog = None
+        if self._loading_dialog:
+            self._loading_dialog.close()
+            self._loading_dialog = None
         self._loader_thread = None
         
         # Load next file from queue if any
@@ -541,8 +566,9 @@ class OBD2MainWindow(QMainWindow):
     
     def _on_file_load_error(self, error_msg: str):
         """Handle file load error from background thread."""
-        self._loading_dialog.close()
-        self._loading_dialog = None
+        if self._loading_dialog:
+            self._loading_dialog.close()
+            self._loading_dialog = None
         self._loader_thread = None
         
         QMessageBox.critical(self, "Error", f"Failed to load file:\n{error_msg}")
@@ -629,9 +655,11 @@ class OBD2MainWindow(QMainWindow):
         
         # Save current visibility state if preserving
         saved_visibility = {}
+        saved_chart_visibility = {}
         if preserve_visibility:
             for channel, control in self.channel_controls.items():
-                saved_visibility[channel] = [cb.isChecked() for cb in control.checkboxes]
+                saved_visibility[channel] = list(control.import_visible)
+                saved_chart_visibility[channel] = control.is_chart_visible()
         
         # Clear existing controls
         for control in self.channel_controls.values():
@@ -667,34 +695,45 @@ class OBD2MainWindow(QMainWindow):
             is_math = channel in self.math_channels
             control = MultiImportChannelControl(channel, display_name, unit, import_colors, is_math)
             control.visibility_changed.connect(self._on_channel_import_toggled)
+            control.chart_visibility_changed.connect(self._on_chart_visibility_toggled)
             control.edit_requested.connect(self._edit_math_channel)
             self.channel_controls[channel] = control
             
             # Determine visibility for this channel
             if channel in show_channels:
                 # Explicitly show this channel (e.g., newly created math channel)
+                control.set_chart_visible(True)
+                self.chart_widget.set_chart_visible(channel, True)
                 for i in range(len(import_colors)):
                     control.set_import_visible(i, True)
                     self.chart_widget.set_channel_import_visible(channel, i, True)
             elif preserve_visibility and channel in saved_visibility:
+                # Restore chart visibility
+                chart_vis = saved_chart_visibility.get(channel, True)
+                control.set_chart_visible(chart_vis)
+                self.chart_widget.set_chart_visible(channel, chart_vis)
+                
+                # Restore import visibility
                 saved = saved_visibility[channel]
                 for i in range(len(import_colors)):
                     if i < len(saved):
-                        # Restore saved visibility
                         visible = saved[i]
                     else:
-                        # New import - default to same as first import's visibility
                         visible = saved[0] if saved else True
                     control.set_import_visible(i, visible)
                     self.chart_widget.set_channel_import_visible(channel, i, visible)
             elif preserve_visibility and channel not in saved_visibility:
                 # New channel while preserving - default to hidden
+                control.set_chart_visible(False)
+                self.chart_widget.set_chart_visible(channel, False)
                 for i in range(len(import_colors)):
                     control.set_import_visible(i, False)
                     self.chart_widget.set_channel_import_visible(channel, i, False)
             elif not preserve_visibility:
                 # Fresh load - default to hidden for math channels only
                 if is_math:
+                    control.set_chart_visible(False)
+                    self.chart_widget.set_chart_visible(channel, False)
                     for i in range(len(import_colors)):
                         control.set_import_visible(i, False)
                         self.chart_widget.set_channel_import_visible(channel, i, False)
@@ -768,6 +807,13 @@ class OBD2MainWindow(QMainWindow):
         self.chart_widget.set_channel_import_visible(channel, import_index, visible)
         
         # Re-sort channel controls after 2 second delay (restart timer if already running)
+        self.sort_timer.start()
+    
+    def _on_chart_visibility_toggled(self, channel: str, visible: bool):
+        """Handle chart visibility toggle (show/hide entire chart)."""
+        self.chart_widget.set_chart_visible(channel, visible)
+        
+        # Re-sort channel controls after 2 second delay
         self.sort_timer.start()
     
     def _show_synchronize_dialog(self, import_index: int):
@@ -912,8 +958,8 @@ class OBD2MainWindow(QMainWindow):
                 try:
                     # Build evaluation context with functions
                     context = {}
-                    context.update(_get_math_functions())
-                    context.update(_get_statistical_functions(times))
+                    context.update(get_math_functions())
+                    context.update(get_statistical_functions(times))
                     
                     # Add if_else for conditionals
                     def if_else(condition, true_val, false_val):
@@ -1029,8 +1075,8 @@ class OBD2MainWindow(QMainWindow):
             try:
                 # Build evaluation context with functions
                 context = {}
-                context.update(_get_math_functions())
-                context.update(_get_statistical_functions(times))
+                context.update(get_math_functions())
+                context.update(get_statistical_functions(times))
                 
                 # Add if_else for conditionals
                 def if_else(condition, true_val, false_val):
@@ -1386,8 +1432,8 @@ class OBD2MainWindow(QMainWindow):
                 try:
                     # Build evaluation context
                     context = {}
-                    context.update(_get_math_functions())
-                    context.update(_get_statistical_functions(times))
+                    context.update(get_math_functions())
+                    context.update(get_statistical_functions(times))
                     
                     def if_else(condition, true_val, false_val):
                         return np.where(condition, true_val, false_val)
@@ -1630,37 +1676,33 @@ class OBD2MainWindow(QMainWindow):
     
     def _show_all_channels(self):
         """Show all channels."""
-        for control in self.channel_controls.values():
+        for channel, control in self.channel_controls.items():
             if isinstance(control, MultiImportChannelControl):
-                for i in range(len(control.checkboxes)):
+                # Show chart
+                control.set_chart_visible(True)
+                self.chart_widget.set_chart_visible(channel, True)
+                # Show all imports
+                for i in range(len(control.import_visible)):
                     control.set_import_visible(i, True)
+                    self.chart_widget.set_channel_import_visible(channel, i, True)
             else:
                 control.checkbox.setChecked(True)
         
-        # Update chart
-        if self.imports:
-            for channel in self.chart_widget.plots:
-                for i in range(len(self.imports)):
-                    self.chart_widget.set_channel_import_visible(channel, i, True)
-        else:
-            self.chart_widget.show_all_channels()
+        # Re-sort controls
+        self._sort_channel_controls()
     
     def _hide_all_channels(self):
         """Hide all channels."""
-        for control in self.channel_controls.values():
+        for channel, control in self.channel_controls.items():
             if isinstance(control, MultiImportChannelControl):
-                for i in range(len(control.checkboxes)):
-                    control.set_import_visible(i, False)
+                # Hide chart
+                control.set_chart_visible(False)
+                self.chart_widget.set_chart_visible(channel, False)
             else:
                 control.checkbox.setChecked(False)
         
-        # Update chart
-        if self.imports:
-            for channel in self.chart_widget.plots:
-                for i in range(len(self.imports)):
-                    self.chart_widget.set_channel_import_visible(channel, i, False)
-        else:
-            self.chart_widget.hide_all_channels()
+        # Re-sort controls
+        self._sort_channel_controls()
     
     def _shift_time(self, delta: float):
         """Shift time range by delta seconds."""
@@ -1751,17 +1793,19 @@ class OBD2MainWindow(QMainWindow):
         new_start = center - new_duration / 2
         new_end = center + new_duration / 2
         
-        # Clamp to data bounds while preserving duration
+        # Boundary-aware clamping: keep boundary in view until center becomes centerable
+        # If centering would push us past a boundary, pin to that boundary instead
         if new_start < chart.min_time:
             new_start = chart.min_time
             new_end = new_start + new_duration
+        
         if new_end > chart.max_time:
             new_end = chart.max_time
             new_start = new_end - new_duration
         
-        # Ensure we don't go below min_time after adjustment
-        if new_start < chart.min_time:
-            new_start = chart.min_time
+        # Final clamp
+        new_start = max(chart.min_time, new_start)
+        new_end = min(chart.max_time, new_end)
         
         chart.set_time_range(new_start, new_end)
         self._update_time_inputs()
@@ -1846,12 +1890,12 @@ class OBD2MainWindow(QMainWindow):
         )
     
     def _load_recent_files(self):
-        """Load recent files from settings."""
-        self.recent_files = self.settings.value("recent_files", [], type=list)
+        """Load recent files from JSON file."""
+        self.recent_files = load_recent_files()
     
     def _save_recent_files(self):
-        """Save recent files to settings."""
-        self.settings.setValue("recent_files", self.recent_files)
+        """Save recent files to JSON file."""
+        save_recent_files(self.recent_files)
     
     def _add_to_recent(self, path: str):
         """Add path to recent files using absolute paths for deduplication."""
@@ -1900,8 +1944,63 @@ class OBD2MainWindow(QMainWindow):
     
     def closeEvent(self, event):
         """Handle window close event."""
+        # Prompt to save view if data is loaded
+        if self.imports and not self.view_manager.prompt_save_view():
+            event.ignore()
+            return
+        
         # Save geometry
         self.settings.setValue("geometry", self.saveGeometry())
         self.settings.setValue("splitter_state", self.splitter.saveState())
         
         event.accept()
+    
+    def _save_view_dialog(self) -> bool:
+        """Show save view dialog."""
+        return self.view_manager.save_view_dialog()
+    
+    def _load_saved_view(self, view_path: str):
+        """Load a saved view from file."""
+        self.view_manager.load_saved_view(view_path)
+    
+    def _delete_saved_view(self, view_path: str):
+        """Delete a single saved view."""
+        from pathlib import Path
+        reply = QMessageBox.question(
+            self, "Delete View",
+            f"Are you sure you want to delete this saved view?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                Path(view_path).unlink()
+                self._update_home_screen()
+                self.statusbar.showMessage("View deleted", 3000)
+            except Exception as e:
+                QMessageBox.warning(self, "Error", f"Failed to delete view: {e}")
+    
+    def _delete_all_saved_views(self):
+        """Delete all saved views."""
+        from .app_data import list_saved_views
+        views = list_saved_views()
+        if not views:
+            return
+        
+        reply = QMessageBox.question(
+            self, "Delete All Views",
+            f"Are you sure you want to delete all {len(views)} saved views?\n\nThis cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            from pathlib import Path
+            deleted = 0
+            for view in views:
+                try:
+                    Path(view['path']).unlink()
+                    deleted += 1
+                except Exception:
+                    pass
+            self._update_home_screen()
+            self.statusbar.showMessage(f"Deleted {deleted} views", 3000)

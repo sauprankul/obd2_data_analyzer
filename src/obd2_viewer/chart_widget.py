@@ -58,6 +58,9 @@ class ChannelPlotWidget(pg.PlotWidget):
         self._x_min_bound = None
         self._x_max_bound = None
         
+        # Last clicked position for zoom centering (set by mouse_clicked)
+        self._last_click_x: Optional[float] = None
+        
         # Create crosshair - vertical line only
         self.vLine = pg.InfiniteLine(angle=90, movable=False, pen=pg.mkPen('#1976D2', width=1, style=Qt.PenStyle.DashLine))
         self.addItem(self.vLine, ignoreBounds=True)
@@ -84,16 +87,37 @@ class ChannelPlotWidget(pg.PlotWidget):
                 # Get current view range
                 view_range = self.viewRange()
                 x_min, x_max = view_range[0]
-                x_center = (x_min + x_max) / 2
                 x_range = x_max - x_min
+                
+                # Use last clicked position as center if available
+                x_center = (x_min + x_max) / 2
+                if self._last_click_x is not None:
+                    if self._x_min_bound is not None and self._x_max_bound is not None:
+                        if self._x_min_bound <= self._last_click_x <= self._x_max_bound:
+                            x_center = self._last_click_x
                 
                 # Zoom factor: scroll up = zoom in, scroll down = zoom out
                 zoom_factor = 0.9 if delta > 0 else 1.1
                 new_range = x_range * zoom_factor
                 
-                # Apply new range centered on current center
+                # Apply new range centered on click position
                 new_min = x_center - new_range / 2
                 new_max = x_center + new_range / 2
+                
+                # Boundary-aware clamping
+                if self._x_min_bound is not None and new_min < self._x_min_bound:
+                    new_min = self._x_min_bound
+                    new_max = new_min + new_range
+                if self._x_max_bound is not None and new_max > self._x_max_bound:
+                    new_max = self._x_max_bound
+                    new_min = new_max - new_range
+                
+                # Final clamp
+                if self._x_min_bound is not None:
+                    new_min = max(self._x_min_bound, new_min)
+                if self._x_max_bound is not None:
+                    new_max = min(self._x_max_bound, new_max)
+                
                 self.setXRange(new_min, new_max, padding=0)
                 
             event.accept()
@@ -267,6 +291,9 @@ class ChannelPlotWidget(pg.PlotWidget):
             mouse_point = self.plotItem.vb.mapSceneToView(pos)
             x = mouse_point.x()
             
+            # Store last clicked position for Ctrl+scroll zoom centering
+            self._last_click_x = x
+            
             self.vLine.setPos(x)
             self.update_hover_value(x)
             self.hover_x_changed.emit(x)
@@ -416,6 +443,9 @@ class OBD2ChartWidget(QWidget):
             for ch in all_channels
         }
         
+        # Initialize chart visibility (whether each chart is shown at all)
+        self.chart_visibility = {ch: True for ch in all_channels}
+        
         # Time range from base (first) import
         if imports:
             base = imports[0]
@@ -509,13 +539,10 @@ class OBD2ChartWidget(QWidget):
                     # This import doesn't have this channel - set empty data
                     plot.set_import_data(i, np.array([]), np.array([]), imp.time_offset)
             
-            # Show/hide based on visibility settings
-            all_hidden = all(
-                not self.channel_visibility.get(channel, {}).get(i, True)
-                for i in range(len(self.imports))
-            )
+            # Show/hide based on chart visibility setting
+            chart_visible = self.chart_visibility.get(channel, True)
             
-            if has_any_data and not all_hidden:
+            if has_any_data and chart_visible:
                 plot.set_x_range(self.current_start, self.current_end)
                 plot.set_x_limits(self.min_time, self.max_time)
                 plot.show()
@@ -585,16 +612,17 @@ class OBD2ChartWidget(QWidget):
         
         if channel in self.plots:
             self.plots[channel].set_import_visible(import_index, visible)
-            
-            # Check if ALL imports for this channel are hidden - if so, hide the plot widget
-            all_hidden = all(
-                not self.channel_visibility[channel].get(i, True)
-                for i in range(len(self.imports))
-            )
-            if all_hidden:
-                self.plots[channel].hide()
-            else:
+    
+    def set_chart_visible(self, channel: str, visible: bool):
+        """Set visibility of an entire chart (show/hide the plot widget)."""
+        # Track chart visibility state
+        self.chart_visibility[channel] = visible
+        
+        if channel in self.plots:
+            if visible:
                 self.plots[channel].show()
+            else:
+                self.plots[channel].hide()
     
     def update_import_offset(self, import_index: int, offset: float):
         """Update the time offset for a specific import."""
@@ -707,14 +735,15 @@ class OBD2ChartWidget(QWidget):
     def get_zoom_center(self) -> float:
         """Get the center point for zoom operations.
         
-        Returns the last clicked position if available and within current view,
+        Returns the last clicked position if available (within data bounds),
         otherwise returns the current view center.
         """
         view_center = (self.current_start + self.current_end) / 2
         
         if self._last_click_x is not None:
-            # Use last click if it's within the current view
-            if self.current_start <= self._last_click_x <= self.current_end:
+            # Use last click if it's within data bounds (not view bounds)
+            # The zoom logic will handle boundary clamping
+            if self.min_time <= self._last_click_x <= self.max_time:
                 return self._last_click_x
         
         return view_center
@@ -797,6 +826,11 @@ class OBD2ChartWidget(QWidget):
                 
                 # Update plot with filtered data
                 plot.set_import_data(i, x_filtered, y_filtered, imp.time_offset)
+        
+        # Respect chart visibility after applying filter data
+        for channel, plot in self.plots.items():
+            if not self.chart_visibility.get(channel, True):
+                plot.hide()
     
     def _insert_nan_separators(self, x: np.ndarray, y: np.ndarray, 
                                 intervals: List[tuple]) -> tuple:

@@ -7,7 +7,8 @@ from typing import List, TYPE_CHECKING
 
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QCheckBox,
-    QListWidget, QListWidgetItem, QDoubleSpinBox, QMainWindow, QSlider
+    QListWidget, QListWidgetItem, QDoubleSpinBox, QMainWindow, QSlider,
+    QGroupBox
 )
 from PyQt6.QtCore import Qt, pyqtSignal
 
@@ -16,10 +17,17 @@ if TYPE_CHECKING:
 
 
 class MultiImportChannelControl(QWidget):
-    """Widget for controlling channel visibility across multiple imports."""
+    """Widget for controlling channel visibility across multiple imports.
+    
+    Layout: [Chart Checkbox] [Color Dot 1] [Color Dot 2] ... [Channel Name] [Edit btn]
+    - Chart checkbox: toggles entire chart visibility
+    - Color dots: clickable buttons to toggle individual import lines (hollow = disabled)
+    """
     
     # Signal: (channel_name, import_index, visible)
     visibility_changed = pyqtSignal(str, int, bool)
+    # Signal: (channel_name, chart_visible) - for toggling entire chart
+    chart_visibility_changed = pyqtSignal(str, bool)
     # Signal: channel_name for edit button clicked (math channels only)
     edit_requested = pyqtSignal(str)
     
@@ -31,27 +39,32 @@ class MultiImportChannelControl(QWidget):
         self.display_name = display_name
         self.unit = unit
         self.is_math_channel = is_math_channel
-        self.checkboxes: List[QCheckBox] = []
+        self.import_colors = import_colors
+        self.color_buttons: List[QPushButton] = []
+        self.import_visible: List[bool] = [True] * len(import_colors)
         
         layout = QHBoxLayout(self)
         layout.setContentsMargins(5, 2, 5, 2)
         
-        # Checkboxes with color indicators on the LEFT (matching Filters layout)
-        for i, color in enumerate(import_colors):
-            # Checkbox first
-            cb = QCheckBox()
-            cb.setChecked(True)
-            cb.stateChanged.connect(lambda state, idx=i: self._on_checkbox_changed(idx, state))
-            self.checkboxes.append(cb)
-            layout.addWidget(cb)
-            
-            # Color indicator after checkbox
-            color_label = QLabel()
-            color_label.setFixedSize(12, 12)
-            color_label.setStyleSheet(f"background-color: {color}; border-radius: 6px;")
-            layout.addWidget(color_label)
+        # Single checkbox for chart visibility
+        self.chart_checkbox = QCheckBox()
+        self.chart_checkbox.setChecked(True)
+        self.chart_checkbox.setToolTip("Show/hide this chart")
+        self.chart_checkbox.stateChanged.connect(self._on_chart_checkbox_changed)
+        layout.addWidget(self.chart_checkbox)
         
-        # Channel name label (no unit - unit shown in section header)
+        # Colored dot buttons for each import
+        for i, color in enumerate(import_colors):
+            btn = QPushButton()
+            btn.setFixedSize(16, 16)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            btn.setToolTip(f"Toggle import {i+1}")
+            btn.clicked.connect(lambda checked, idx=i: self._on_color_button_clicked(idx))
+            self._update_color_button_style(btn, color, True)
+            self.color_buttons.append(btn)
+            layout.addWidget(btn)
+        
+        # Channel name label
         name_label = QLabel(display_name)
         name_label.setMinimumWidth(150)
         layout.addWidget(name_label, 1)
@@ -65,19 +78,70 @@ class MultiImportChannelControl(QWidget):
             edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.channel_name))
             layout.addWidget(edit_btn)
     
-    def _on_checkbox_changed(self, import_index: int, state: int):
+    def _update_color_button_style(self, btn: QPushButton, color: str, enabled: bool):
+        """Update button style: solid circle if enabled, hollow ring if disabled."""
+        if enabled:
+            # Solid filled circle
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: {color};
+                    border: 2px solid {color};
+                    border-radius: 8px;
+                }}
+                QPushButton:hover {{
+                    border: 2px solid #333;
+                }}
+            """)
+        else:
+            # Hollow ring (just border, no fill)
+            btn.setStyleSheet(f"""
+                QPushButton {{
+                    background-color: transparent;
+                    border: 2px solid {color};
+                    border-radius: 8px;
+                }}
+                QPushButton:hover {{
+                    background-color: rgba(128, 128, 128, 0.2);
+                }}
+            """)
+    
+    def _on_chart_checkbox_changed(self, state: int):
+        """Handle chart visibility checkbox change."""
         visible = state == Qt.CheckState.Checked.value
+        self.chart_visibility_changed.emit(self.channel_name, visible)
+    
+    def _on_color_button_clicked(self, import_index: int):
+        """Handle color button click - toggle import visibility."""
+        self.import_visible[import_index] = not self.import_visible[import_index]
+        visible = self.import_visible[import_index]
+        
+        # Update button style
+        color = self.import_colors[import_index]
+        self._update_color_button_style(self.color_buttons[import_index], color, visible)
+        
+        # Emit signal
         self.visibility_changed.emit(self.channel_name, import_index, visible)
     
     def set_import_visible(self, import_index: int, visible: bool):
-        if import_index < len(self.checkboxes):
-            self.checkboxes[import_index].blockSignals(True)
-            self.checkboxes[import_index].setChecked(visible)
-            self.checkboxes[import_index].blockSignals(False)
+        """Set visibility for a specific import (without emitting signal)."""
+        if import_index < len(self.color_buttons):
+            self.import_visible[import_index] = visible
+            color = self.import_colors[import_index]
+            self._update_color_button_style(self.color_buttons[import_index], color, visible)
+    
+    def set_chart_visible(self, visible: bool):
+        """Set chart visibility (without emitting signal)."""
+        self.chart_checkbox.blockSignals(True)
+        self.chart_checkbox.setChecked(visible)
+        self.chart_checkbox.blockSignals(False)
+    
+    def is_chart_visible(self) -> bool:
+        """Return True if the chart checkbox is checked."""
+        return self.chart_checkbox.isChecked()
     
     def is_any_selected(self) -> bool:
-        """Return True if at least one import checkbox is checked."""
-        return any(cb.isChecked() for cb in self.checkboxes)
+        """Return True if chart checkbox is checked (determines Shown vs Hidden pile)."""
+        return self.chart_checkbox.isChecked()
     
     def sort_key(self, is_selected: bool) -> tuple:
         """Return sort key: (not selected, unit, display_name)."""
@@ -234,12 +298,15 @@ class SidebarWindow(QMainWindow):
 
 
 class HomeWidget(QWidget):
-    """Home screen showing past imports."""
+    """Home screen showing past imports and saved views."""
     
     open_file_requested = pyqtSignal(str)
     open_files_requested = pyqtSignal(list)
     open_new_requested = pyqtSignal()
     clear_history_requested = pyqtSignal()
+    open_view_requested = pyqtSignal(str)  # Emits view path
+    delete_view_requested = pyqtSignal(str)  # Emits view path
+    delete_all_views_requested = pyqtSignal()
     
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -267,36 +334,62 @@ class HomeWidget(QWidget):
         
         layout.addSpacing(30)
         
-        past_label = QLabel("Past Imports (select multiple with Ctrl+Click)")
-        past_label.setStyleSheet("font-size: 14pt; font-weight: bold;")
-        layout.addWidget(past_label)
+        # Two-column layout for lists using QGroupBox for equal sizing
+        lists_layout = QHBoxLayout()
+        
+        # Left column: Past Imports
+        left_group = QGroupBox("Past Imports (select multiple with Ctrl+Click)")
+        left_group.setStyleSheet("QGroupBox { font-size: 14pt; font-weight: bold; }")
+        left_col = QVBoxLayout(left_group)
         
         self.past_list = QListWidget()
         self.past_list.setMinimumHeight(200)
         self.past_list.setSelectionMode(QListWidget.SelectionMode.ExtendedSelection)
         self.past_list.itemDoubleClicked.connect(self._on_item_double_clicked)
-        layout.addWidget(self.past_list)
+        left_col.addWidget(self.past_list)
         
         btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        
         self.open_selected_btn = QPushButton("📂 Open Selected")
-        self.open_selected_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold; font-size: 14pt; padding: 12px 40px; border-radius: 5px;")
+        self.open_selected_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold; padding: 8px 20px; border-radius: 5px;")
         self.open_selected_btn.clicked.connect(self._open_selected)
         btn_row.addWidget(self.open_selected_btn)
         
-        btn_row.addStretch()
-        layout.addLayout(btn_row)
-        
-        clear_row = QHBoxLayout()
-        clear_row.addStretch()
         clear_btn = QPushButton("Clear History")
-        clear_btn.setStyleSheet("background-color: #616161; color: white;")
+        clear_btn.setStyleSheet("background-color: #616161; color: white; padding: 8px 15px;")
         clear_btn.clicked.connect(self._clear_history)
-        clear_row.addWidget(clear_btn)
-        clear_row.addStretch()
-        layout.addLayout(clear_row)
+        btn_row.addWidget(clear_btn)
+        btn_row.addStretch()
+        left_col.addLayout(btn_row)
         
+        lists_layout.addWidget(left_group, 1)
+        
+        # Right column: Saved Views
+        right_group = QGroupBox("Saved Views")
+        right_group.setStyleSheet("QGroupBox { font-size: 14pt; font-weight: bold; }")
+        right_col = QVBoxLayout(right_group)
+        
+        self.views_list = QListWidget()
+        self.views_list.setMinimumHeight(200)
+        self.views_list.itemDoubleClicked.connect(self._on_view_double_clicked)
+        right_col.addWidget(self.views_list)
+        
+        # Buttons row for saved views (matching left column)
+        views_btn_row = QHBoxLayout()
+        self.open_view_btn = QPushButton("📂 Open Selected")
+        self.open_view_btn.setStyleSheet("background-color: #388E3C; color: white; font-weight: bold; padding: 8px 20px; border-radius: 5px;")
+        self.open_view_btn.clicked.connect(self._open_selected_view)
+        views_btn_row.addWidget(self.open_view_btn)
+        
+        delete_all_btn = QPushButton("Delete All")
+        delete_all_btn.setStyleSheet("background-color: #D32F2F; color: white; padding: 8px 15px;")
+        delete_all_btn.clicked.connect(self._delete_all_views)
+        views_btn_row.addWidget(delete_all_btn)
+        views_btn_row.addStretch()
+        right_col.addLayout(views_btn_row)
+        
+        lists_layout.addWidget(right_group, 1)
+        
+        layout.addLayout(lists_layout)
         layout.addStretch()
     
     def update_past_imports(self, recent_files: List[str]):
@@ -333,6 +426,63 @@ class HomeWidget(QWidget):
     def _clear_history(self):
         self.past_list.clear()
         self.clear_history_requested.emit()
+    
+    def update_saved_views(self, views: List[dict]):
+        """Update the saved views list.
+        
+        Args:
+            views: List of dicts with 'name', 'path', 'modified_at' keys
+        """
+        self.views_list.clear()
+        for view in views:
+            # Create a widget with label and delete button
+            item_widget = QWidget()
+            item_layout = QHBoxLayout(item_widget)
+            item_layout.setContentsMargins(2, 2, 2, 2)
+            item_layout.setSpacing(5)
+            
+            label = QLabel(f"📋 {view['name']}")
+            label.setToolTip(f"Modified: {view.get('modified_at', 'Unknown')}")
+            item_layout.addWidget(label, 1)
+            
+            delete_btn = QPushButton("🗑")
+            delete_btn.setFixedSize(24, 24)
+            delete_btn.setStyleSheet("background-color: #D32F2F; color: white; border-radius: 3px; font-size: 10pt;")
+            delete_btn.setToolTip("Delete this view")
+            delete_btn.clicked.connect(lambda checked, p=view['path']: self._delete_view(p))
+            item_layout.addWidget(delete_btn)
+            
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, view['path'])
+            item.setSizeHint(item_widget.sizeHint())
+            self.views_list.addItem(item)
+            self.views_list.setItemWidget(item, item_widget)
+        
+        if not views:
+            item = QListWidgetItem("No saved views")
+            item.setFlags(Qt.ItemFlag.NoItemFlags)
+            self.views_list.addItem(item)
+    
+    def _on_view_double_clicked(self, item: QListWidgetItem):
+        path = item.data(Qt.ItemDataRole.UserRole)
+        if path:
+            self.open_view_requested.emit(path)
+    
+    def _open_selected_view(self):
+        """Open the currently selected view."""
+        selected_items = self.views_list.selectedItems()
+        if selected_items:
+            path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+            if path:
+                self.open_view_requested.emit(path)
+    
+    def _delete_view(self, path: str):
+        """Delete a single view."""
+        self.delete_view_requested.emit(path)
+    
+    def _delete_all_views(self):
+        """Delete all saved views."""
+        self.delete_all_views_requested.emit()
 
 
 class TimeNavigationWidget(QWidget):
