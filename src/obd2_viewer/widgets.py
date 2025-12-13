@@ -287,10 +287,24 @@ class SidebarWindow(QMainWindow):
         self.setWindowTitle("OBD2 Controls")
         self.setMinimumSize(350, 600)
         
+        # Set initial size to 1024x768 and center on screen
+        self.resize(1024, 768)
+        self._center_on_screen()
+        
         self.central = QWidget()
         self.setCentralWidget(self.central)
         self.layout = QVBoxLayout(self.central)
         self.layout.setContentsMargins(5, 5, 5, 5)
+    
+    def _center_on_screen(self):
+        """Center the window on the primary screen."""
+        from PyQt6.QtGui import QGuiApplication
+        screen = QGuiApplication.primaryScreen()
+        if screen:
+            screen_geometry = screen.availableGeometry()
+            x = (screen_geometry.width() - self.width()) // 2 + screen_geometry.x()
+            y = (screen_geometry.height() - self.height()) // 2 + screen_geometry.y()
+            self.move(x, y)
     
     def closeEvent(self, event):
         self.closed.emit()

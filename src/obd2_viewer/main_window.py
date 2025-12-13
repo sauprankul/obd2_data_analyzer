@@ -98,6 +98,16 @@ class OBD2MainWindow(QMainWindow):
         self.sidebar_window: Optional['SidebarWindow'] = None
         self.is_split_mode = False
         
+        # Max channel name length for column calculation
+        self._max_channel_name_length = 0
+        self._last_column_count = 1  # Track last column count to detect changes
+        
+        # Debounced resize timer for re-layout
+        self._resize_timer = QTimer()
+        self._resize_timer.setSingleShot(True)
+        self._resize_timer.setInterval(150)  # 150ms debounce
+        self._resize_timer.timeout.connect(self._on_sidebar_resized)
+        
         # View manager for save/load
         self.view_manager = ViewManager(self)
         
@@ -169,8 +179,8 @@ class OBD2MainWindow(QMainWindow):
         left_layout.addWidget(legend_group)
         
         # Channel controls group
-        channel_group = QGroupBox("Channel Controls")
-        channel_layout = QVBoxLayout(channel_group)
+        self.channel_group = QGroupBox("Channel Controls")
+        channel_layout = QVBoxLayout(self.channel_group)
         
         # Graph height buttons
         height_layout = QHBoxLayout()
@@ -232,7 +242,10 @@ class OBD2MainWindow(QMainWindow):
         self.channel_scroll.setWidget(self.channel_list_widget)
         channel_layout.addWidget(self.channel_scroll)
         
-        left_layout.addWidget(channel_group)
+        # Install event filter to detect resize
+        self.channel_group.installEventFilter(self)
+        
+        left_layout.addWidget(self.channel_group)
         
         # Time navigation group
         time_group = QGroupBox("Time Navigation")
@@ -678,6 +691,15 @@ class OBD2MainWindow(QMainWindow):
         for imp in self.imports:
             all_channels.update(imp.channels_data.keys())
         
+        # Calculate max channel name length
+        self._max_channel_name_length = 0
+        for channel in all_channels:
+            for imp in self.imports:
+                if channel in imp.channels_data:
+                    display_name = imp.display_names.get(channel, channel)
+                    self._max_channel_name_length = max(self._max_channel_name_length, len(display_name))
+                    break
+        
         # Get colors for each import
         import_colors = [imp.color for imp in self.imports]
         
@@ -741,8 +763,55 @@ class OBD2MainWindow(QMainWindow):
         # Sort and add to layout
         self._sort_channel_controls()
     
+    def _get_column_count(self) -> int:
+        """Calculate number of columns based on sidebar width and control size."""
+        # Estimate control width: checkbox(20) + dots(18*num_imports) + name + padding
+        num_imports = len(self.imports) if self.imports else 1
+        char_width = 7  # Approximate pixels per character
+        # Cap name width at reasonable max (30 chars displayed)
+        effective_name_len = min(30, self._max_channel_name_length)
+        name_width = max(120, effective_name_len * char_width)  # Minimum 120px for name
+        control_width = 25 + (20 * num_imports) + name_width + 15  # checkbox + dots + name + margins
+        
+        # Get sidebar width from the channel_group
+        sidebar_width = 300  # Default
+        if hasattr(self, 'channel_group') and self.channel_group.width() > 50:
+            sidebar_width = self.channel_group.width() - 30  # Account for group margins/padding
+        
+        # Calculate columns (minimum 1, maximum 3)
+        if control_width > 0:
+            cols = max(1, min(3, sidebar_width // control_width))
+        else:
+            cols = 1
+        
+        logger.info(f"Column calc: sidebar={sidebar_width}px, control={control_width}px, name_len={effective_name_len}, cols={cols}")
+        return cols
+    
+    def eventFilter(self, obj, event):
+        """Handle events for filtered objects."""
+        from PyQt6.QtCore import QEvent
+        if obj == self.channel_group and event.type() == QEvent.Type.Resize:
+            # Debounce resize events
+            self._resize_timer.start()
+        return super().eventFilter(obj, event)
+    
+    def _on_sidebar_resized(self):
+        """Handle sidebar resize - re-layout if column count changed."""
+        if not self.channel_controls:
+            return
+        
+        new_cols = self._get_column_count()
+        if new_cols != self._last_column_count:
+            self._last_column_count = new_cols
+            self._sort_channel_controls()
+    
     def _sort_channel_controls(self):
-        """Sort channel controls with section headers: Shown/Hidden, then by unit."""
+        """Sort channel controls with section headers: Shown/Hidden, then by unit.
+        
+        Uses multi-column layout with column-first flow within each unit subsection.
+        """
+        from PyQt6.QtWidgets import QGridLayout, QFrame
+        
         # Remove all widgets from layout (but don't delete controls)
         while self.channel_list_layout.count() > 0:
             item = self.channel_list_layout.takeAt(0)
@@ -765,6 +834,9 @@ class OBD2MainWindow(QMainWindow):
         shown_controls.sort(key=lambda c: (c.unit.lower(), c.display_name.lower()))
         hidden_controls.sort(key=lambda c: (c.unit.lower(), c.display_name.lower()))
         
+        # Get column count
+        num_cols = self._get_column_count()
+        
         def add_section_header(text: str, color: str = "#1976D2"):
             """Add a section header label."""
             header = QLabel(f"<b>{text}</b>")
@@ -773,31 +845,70 @@ class OBD2MainWindow(QMainWindow):
         
         def add_unit_header(unit: str):
             """Add a unit subheader."""
-            header = QLabel(f"  {unit}" if unit else "  (no unit)")
-            header.setStyleSheet("color: #666; font-size: 9pt; padding: 2px 0px 0px 10px; font-style: italic;")
+            display_unit = unit if unit else "(no unit)"
+            header = QLabel(display_unit)
+            header.setStyleSheet("color: white; font-size: 11pt; padding: 4px 8px; font-weight: bold; background-color: #555;")
             self.channel_list_layout.addWidget(header)
+        
+        def add_controls_grid(controls: list):
+            """Add controls in a grid with column-first flow."""
+            if not controls:
+                return
+            
+            # Create container widget with grid layout
+            container = QFrame()
+            grid = QGridLayout(container)
+            grid.setContentsMargins(0, 0, 0, 0)
+            grid.setSpacing(2)
+            
+            # Calculate rows needed (at least 1 row)
+            num_rows = max(1, (len(controls) + num_cols - 1) // num_cols)
+            
+            # Fill column-first (like reading a book vertically then horizontally)
+            for idx, control in enumerate(controls):
+                col = idx // num_rows
+                row = idx % num_rows
+                grid.addWidget(control, row, col)
+            
+            # Set column stretch to ensure all columns have equal width
+            for col in range(num_cols):
+                grid.setColumnStretch(col, 1)
+            
+            self.channel_list_layout.addWidget(container)
+        
+        # Group controls by unit
+        def group_by_unit(controls):
+            """Group controls by unit, preserving sort order."""
+            groups = []
+            current_unit = None
+            current_group = []
+            for control in controls:
+                if control.unit != current_unit:
+                    if current_group:
+                        groups.append((current_unit, current_group))
+                    current_unit = control.unit
+                    current_group = [control]
+                else:
+                    current_group.append(control)
+            if current_group:
+                groups.append((current_unit, current_group))
+            return groups
         
         # Add Shown section
         if shown_controls:
             add_section_header(f"▼ Shown ({len(shown_controls)})", "#388E3C")
             
-            current_unit = None
-            for control in shown_controls:
-                if control.unit != current_unit:
-                    current_unit = control.unit
-                    add_unit_header(current_unit)
-                self.channel_list_layout.addWidget(control)
+            for unit, controls in group_by_unit(shown_controls):
+                add_unit_header(unit)
+                add_controls_grid(controls)
         
         # Add Hidden section
         if hidden_controls:
             add_section_header(f"▼ Hidden ({len(hidden_controls)})", "#757575")
             
-            current_unit = None
-            for control in hidden_controls:
-                if control.unit != current_unit:
-                    current_unit = control.unit
-                    add_unit_header(current_unit)
-                self.channel_list_layout.addWidget(control)
+            for unit, controls in group_by_unit(hidden_controls):
+                add_unit_header(unit)
+                add_controls_grid(controls)
         
         # Add stretch at end
         self.channel_list_layout.addStretch()
@@ -1030,6 +1141,9 @@ class OBD2MainWindow(QMainWindow):
             'inputs': inputs,
             'unit': unit
         }
+        
+        # Update max channel name length
+        self._max_channel_name_length = max(self._max_channel_name_length, len(name))
         
         input_a = inputs.get('A', '')
         
@@ -1731,13 +1845,8 @@ class OBD2MainWindow(QMainWindow):
             # Add to sidebar window
             self.sidebar_window.layout.addWidget(self.left_panel)
             
-            # Show sidebar window
+            # Show sidebar window (1024x768 centered, set in SidebarWindow.__init__)
             self.sidebar_window.show()
-            
-            # Position sidebar window to the left of main window
-            main_geo = self.geometry()
-            self.sidebar_window.move(main_geo.left() - 360, main_geo.top())
-            self.sidebar_window.resize(350, main_geo.height())
             
         else:
             # Exit split mode - move sidebar back to main window
