@@ -33,15 +33,18 @@ class MathChannelDialog(QDialog):
     INPUT_LABELS = ['A', 'B', 'C', 'D', 'E']
     
     def __init__(self, available_channels: List[str], available_units: List[str],
-                 channel_units: Dict[str, str] = None, edit_data: Optional[Dict] = None, parent=None):
+                 channel_units: Dict[str, str] = None, math_channel_deps: Dict[str, set] = None,
+                 edit_data: Optional[Dict] = None, parent=None):
         super().__init__(parent)
         
         self.channel_units = channel_units or {}
+        self.math_channel_deps = math_channel_deps or {}  # {channel_name: set of dependencies}
         # Sort channels by unit then alphabetically, format with unit suffix
         self.available_channels = available_channels
         self.sorted_channel_items = self._sort_channels_by_unit(available_channels)
         self.edit_mode = edit_data is not None
         self.original_name = edit_data.get('name', '') if edit_data else ''
+        self._has_cycle = False  # Track if current selection has a cycle
         
         self.setWindowTitle("Edit Math Channel" if self.edit_mode else "Create Math Channel")
         self.setMinimumWidth(550)
@@ -88,6 +91,13 @@ class MathChannelDialog(QDialog):
             self.input_unit_labels[label] = unit_lbl
         
         layout.addWidget(inputs_group)
+        
+        # Cycle warning label (hidden by default)
+        self.cycle_warning_label = QLabel("")
+        self.cycle_warning_label.setStyleSheet("color: #D32F2F; font-size: 9pt; font-weight: bold; padding: 5px;")
+        self.cycle_warning_label.setWordWrap(True)
+        self.cycle_warning_label.hide()
+        layout.addWidget(self.cycle_warning_label)
         
         # Expression section
         expr_group = QGroupBox("Expression")
@@ -214,7 +224,9 @@ class MathChannelDialog(QDialog):
         return text if text != "(None)" else ""
     
     def _update_unit_labels(self):
-        """Update the unit labels for all inputs."""
+        """Update the unit labels for all inputs and check for cycles."""
+        cycle_inputs = []  # Track which inputs cause cycles
+        
         for label in self.INPUT_LABELS:
             combo = self.input_combos[label]
             unit_lbl = self.input_unit_labels[label]
@@ -224,13 +236,81 @@ class MathChannelDialog(QDialog):
                 unit_lbl.setText(f"[{self.channel_units[channel]}]")
             else:
                 unit_lbl.setText("")
+            
+            # Check if this input would cause a cycle
+            if channel:
+                cycle_path = self._check_cycle(channel)
+                if cycle_path:
+                    cycle_inputs.append((label, channel, cycle_path))
+                    combo.setStyleSheet("border: 2px solid #D32F2F;")
+                else:
+                    combo.setStyleSheet("")
+            else:
+                combo.setStyleSheet("")
+        
+        # Update cycle warning
+        if cycle_inputs:
+            self._has_cycle = True
+            warnings = []
+            for label, channel, path in cycle_inputs:
+                chain = " → ".join(path)
+                warnings.append(f"Input {label} ({channel}): {chain}")
+            self.cycle_warning_label.setText("⚠ Circular dependency detected:\n" + "\n".join(warnings))
+            self.cycle_warning_label.show()
+        else:
+            self._has_cycle = False
+            self.cycle_warning_label.hide()
         
         # Re-validate expression when inputs change
         self._validate_expression()
     
+    def _check_cycle(self, input_channel: str) -> Optional[List[str]]:
+        """Check if using input_channel would create a dependency cycle.
+        
+        Returns the cycle path if a cycle exists, None otherwise.
+        """
+        current_name = self.name_input.text().strip()
+        if not current_name:
+            return None
+        
+        # Build a temporary dependency graph including the new channel
+        temp_deps = dict(self.math_channel_deps)
+        
+        # Get all currently selected inputs for this new/edited channel
+        new_deps = set()
+        for label in self.INPUT_LABELS:
+            ch = self._get_channel_from_combo(self.input_combos[label])
+            if ch:
+                new_deps.add(ch)
+        temp_deps[current_name] = new_deps
+        
+        # DFS to find cycle starting from input_channel back to current_name
+        def find_path_to_target(start: str, target: str, visited: set, path: List[str]) -> Optional[List[str]]:
+            if start == target:
+                return path + [target]
+            if start in visited:
+                return None
+            if start not in temp_deps:
+                return None
+            
+            visited.add(start)
+            for dep in temp_deps[start]:
+                result = find_path_to_target(dep, target, visited, path + [start])
+                if result:
+                    return result
+            return None
+        
+        # Check if input_channel eventually depends on current_name
+        if input_channel in temp_deps:
+            path = find_path_to_target(input_channel, current_name, set(), [current_name])
+            if path:
+                return path
+        
+        return None
+    
     def _on_name_changed(self):
-        """Re-validate when name changes."""
-        self._validate_expression()
+        """Re-validate when name changes (also re-check cycles)."""
+        self._update_unit_labels()  # This will re-check cycles and call _validate_expression
     
     def _get_eval_context(self, test_values: Dict[str, float] = None):
         """Get the evaluation context with all available functions."""
@@ -301,7 +381,8 @@ class MathChannelDialog(QDialog):
             inputs_str = ", ".join([f"{l}=[1-5]" for l in used_inputs])
             self.validation_label.setText(f"✓ Valid ({inputs_str} → {result_str})")
             self.validation_label.setStyleSheet("color: #388E3C; font-size: 9pt;")
-            self.create_btn.setEnabled(bool(name))
+            # Disable if there's a cycle or no name
+            self.create_btn.setEnabled(bool(name) and not self._has_cycle)
             
         except Exception as e:
             self.validation_label.setText(f"✗ Invalid: {str(e)}")

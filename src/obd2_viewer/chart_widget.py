@@ -23,8 +23,6 @@ class ChannelPlotWidget(pg.PlotWidget):
     hover_x_changed = pyqtSignal(float)
     # Signal emitted when x range changes via drag
     x_range_changed = pyqtSignal(float, float)
-    # Signal emitted when user clicks to center on a position
-    click_to_center = pyqtSignal(float)
     
     def __init__(self, channel_name: str, unit: str, parent=None):
         super().__init__(parent)
@@ -78,6 +76,10 @@ class ChannelPlotWidget(pg.PlotWidget):
         self.setMouseEnabled(x=True, y=False)
         self.getViewBox().setMouseEnabled(x=True, y=False)
         
+        # Disable double-click to auto-range (we want double-click to just be two clicks)
+        self.getViewBox().setMenuEnabled(False)
+        self.getViewBox().mouseDoubleClickEvent = lambda ev: None
+        
         
     def wheelEvent(self, event):
         """Override wheel event - Ctrl+scroll zooms X axis, otherwise scroll container."""
@@ -107,19 +109,22 @@ class ChannelPlotWidget(pg.PlotWidget):
                 new_min = x_center - new_range / 2
                 new_max = x_center + new_range / 2
                 
-                # Boundary-aware clamping
-                if self._x_min_bound is not None and new_min < self._x_min_bound:
-                    new_min = self._x_min_bound
-                    new_max = new_min + new_range
-                if self._x_max_bound is not None and new_max > self._x_max_bound:
-                    new_max = self._x_max_bound
-                    new_min = new_max - new_range
+                # Boundary-aware clamping - preserve range, prioritize keeping boundary visible
+                # If range exceeds data bounds, just show full data
+                data_range = (self._x_max_bound - self._x_min_bound) if (self._x_min_bound is not None and self._x_max_bound is not None) else None
                 
-                # Final clamp
-                if self._x_min_bound is not None:
-                    new_min = max(self._x_min_bound, new_min)
-                if self._x_max_bound is not None:
-                    new_max = min(self._x_max_bound, new_max)
+                if data_range is not None and new_range >= data_range:
+                    # Zoomed out to full range or beyond
+                    new_min = self._x_min_bound
+                    new_max = self._x_max_bound
+                elif self._x_min_bound is not None and new_min < self._x_min_bound:
+                    # Pin to left boundary
+                    new_min = self._x_min_bound
+                    new_max = self._x_min_bound + new_range
+                elif self._x_max_bound is not None and new_max > self._x_max_bound:
+                    # Pin to right boundary
+                    new_max = self._x_max_bound
+                    new_min = self._x_max_bound - new_range
                 
                 self.setXRange(new_min, new_max, padding=0)
                 
@@ -128,6 +133,13 @@ class ChannelPlotWidget(pg.PlotWidget):
             # Normal scroll: pass to parent (scroll area)
             event.ignore()
         
+    def update_title_and_unit(self, channel_name: str, unit: str):
+        """Update the plot title and unit labels (used when editing math channels)."""
+        self.channel_name = channel_name
+        self.unit = unit
+        self.setTitle(f'<span style="font-size: 11pt; font-weight: bold;">{channel_name}</span> <span style="font-size: 10pt; color: #666;">({unit})</span>')
+        self.setLabel('left', '', units=unit)
+    
     def set_import_count(self, count: int, colors: List[str]):
         """Initialize data structures for the given number of imports."""
         # Clear existing data lines
@@ -289,9 +301,17 @@ class ChannelPlotWidget(pg.PlotWidget):
     
     def mouse_clicked(self, event):
         """Handle mouse click for crosshair positioning and centering view."""
+        # Only handle left clicks
+        from PyQt6.QtCore import Qt
+        if event.button() != Qt.MouseButton.LeftButton:
+            return
+            
         pos = event.scenePos()
-        if self.sceneBoundingRect().contains(pos):
-            mouse_point = self.plotItem.vb.mapSceneToView(pos)
+        # Use the viewBox's sceneBoundingRect for accurate hit testing
+        # (the plot's sceneBoundingRect can be stale after resize)
+        vb = self.plotItem.vb
+        if vb.sceneBoundingRect().contains(pos):
+            mouse_point = vb.mapSceneToView(pos)
             x = mouse_point.x()
             
             # Store last clicked position for Ctrl+scroll zoom centering
@@ -300,9 +320,6 @@ class ChannelPlotWidget(pg.PlotWidget):
             self.vLine.setPos(x)
             self.update_hover_value(x)
             self.hover_x_changed.emit(x)
-            
-            # Emit signal to center view on clicked position
-            self.click_to_center.emit(x)
     
     def update_hover_value(self, x: float):
         """Update the displayed hover value for given x position."""
@@ -519,7 +536,6 @@ class OBD2ChartWidget(QWidget):
             # Connect signals
             plot.hover_x_changed.connect(self._on_hover_x_changed)
             plot.x_range_changed.connect(self._on_plot_x_range_changed)
-            plot.click_to_center.connect(self._on_click_to_center)
             
             self.plots[channel] = plot
             self.plots_layout.addWidget(plot)
@@ -555,7 +571,9 @@ class OBD2ChartWidget(QWidget):
     def add_channel(self, channel: str, display_name: str, unit: str):
         """Add a new channel (e.g., math channel) to the chart."""
         if channel in self.plots:
-            # Channel already exists - just update data
+            # Channel already exists - update title/unit and data
+            plot = self.plots[channel]
+            plot.update_title_and_unit(display_name, unit)
             self._update_single_plot(channel)
             return
         
@@ -577,7 +595,6 @@ class OBD2ChartWidget(QWidget):
         # Connect signals
         plot.hover_x_changed.connect(self._on_hover_x_changed)
         plot.x_range_changed.connect(self._on_plot_x_range_changed)
-        plot.click_to_center.connect(self._on_click_to_center)
         
         self.plots[channel] = plot
         self.plots_layout.addWidget(plot)
@@ -714,27 +731,6 @@ class OBD2ChartWidget(QWidget):
         self.current_end = min(self.max_time, x_max)
         self.time_range_changed.emit(self.current_start, self.current_end)
     
-    def _on_click_to_center(self, x: float):
-        """Handle click to center - shift view so clicked position is at center."""
-        # Store last clicked position for zoom centering
-        self._last_click_x = x
-        
-        duration = self.current_end - self.current_start
-        half_duration = duration / 2
-        
-        new_start = x - half_duration
-        new_end = x + half_duration
-        
-        # Clamp to data bounds
-        if new_start < self.min_time:
-            new_start = self.min_time
-            new_end = new_start + duration
-        if new_end > self.max_time:
-            new_end = self.max_time
-            new_start = new_end - duration
-        
-        self.set_time_range(new_start, new_end)
-    
     def get_zoom_center(self) -> float:
         """Get the center point for zoom operations.
         
@@ -772,6 +768,27 @@ class OBD2ChartWidget(QWidget):
         for plot in self.plots.values():
             plot.setMinimumHeight(self._plot_height_min)
             plot.setMaximumHeight(self._plot_height_max)
+    
+    def reorder_plots(self, channel_order: List[str]):
+        """Reorder plots to match the given channel order.
+        
+        Args:
+            channel_order: List of channel names in desired order
+        """
+        # Remove all plots from layout (but don't delete them)
+        for channel in list(self.plots.keys()):
+            plot = self.plots[channel]
+            self.plots_layout.removeWidget(plot)
+        
+        # Re-add plots in the specified order
+        for channel in channel_order:
+            if channel in self.plots:
+                self.plots_layout.addWidget(self.plots[channel])
+        
+        # Add any remaining plots not in the order list (shouldn't happen, but safety)
+        for channel, plot in self.plots.items():
+            if channel not in channel_order:
+                self.plots_layout.addWidget(plot)
     
     def set_filter_mask(self, filter_masks: Optional[Dict[int, Dict[str, np.ndarray]]], 
                         filter_intervals: Optional[Dict[int, List[tuple]]] = None):

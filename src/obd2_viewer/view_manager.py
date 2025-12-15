@@ -311,6 +311,11 @@ class ViewManager:
         # Apply math channels to compute their data
         if mw.math_channels:
             mw._apply_math_channels_to_imports()
+            # Add math channel plots to chart widget
+            for name, definition in mw.math_channels.items():
+                display_name = name.replace('_', ' ').title()
+                unit = definition.get('unit', '')
+                mw.chart_widget.add_channel(name, display_name, unit)
         
         # Restore filters
         mw.filter_order = view.filter_order.copy()
@@ -351,7 +356,8 @@ class ViewManager:
         
         # Restore split mode
         if view.is_split_mode and not mw.is_split_mode:
-            mw._toggle_split_mode()
+            mw.split_window_action.setChecked(True)
+            mw._toggle_split_window(True)
         
         # Update UI
         mw._update_filter_controls()
@@ -372,11 +378,19 @@ class ViewManager:
         """Clear current imports and state."""
         mw = self.main_window
         
+        # Exit split mode if active (restore sidebar to main window)
+        if mw.is_split_mode:
+            mw.split_window_action.setChecked(False)
+            mw._restore_sidebar()
+        
         mw.imports.clear()
         mw.math_channels.clear()
         mw.filters.clear()
         mw.filter_order.clear()
         mw.channel_controls.clear()
+        
+        # Clear view name (will be set again after loading)
+        self._current_view_name = None
         
         # Clear chart widget
         for plot in list(mw.chart_widget.plots.values()):

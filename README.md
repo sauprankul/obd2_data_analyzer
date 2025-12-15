@@ -26,7 +26,7 @@ A Windows application for visualizing and comparing CSV data. Built with PyQt6 a
 - **Adjustable Graph Heights**: Taller/Shorter buttons adjust all chart heights by 5% increments
 - **LOD Optimization**: Level-of-detail downsampling (max 2000 points) for smooth performance with large datasets
 - **Scroll Wheel**: Scrolls the graph area vertically
-- **Ctrl+Scroll**: Zooms X-axis in/out centered on current view
+- **Ctrl+Scroll**: Zooms X-axis in/out centered on last clicked position (or view center if none)
 
 ### Time Navigation
 

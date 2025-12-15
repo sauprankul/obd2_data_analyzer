@@ -916,6 +916,11 @@ class OBD2MainWindow(QMainWindow):
         
         # Add stretch at end
         self.channel_list_layout.addStretch()
+        
+        # Reorder chart plots to match sidebar order (shown first, then hidden, both sorted by unit)
+        all_sorted_controls = shown_controls + hidden_controls
+        channel_order = [c.channel_name for c in all_sorted_controls]
+        self.chart_widget.reorder_plots(channel_order)
     
     def _on_channel_import_toggled(self, channel: str, import_index: int, visible: bool):
         """Handle channel visibility toggle for a specific import."""
@@ -950,6 +955,9 @@ class OBD2MainWindow(QMainWindow):
             self.chart_widget.update_import_offset(import_index, new_offset)
             # Update the offset display in the legend
             self.import_legend.update_offset(import_index, new_offset)
+            # Reapply filters after offset change (filter masks need to be recomputed)
+            if self.filters:
+                self._apply_filters()
     
     def _show_color_picker(self, import_index: int):
         """Show color picker dialog for an import."""
@@ -977,24 +985,34 @@ class OBD2MainWindow(QMainWindow):
             QMessageBox.warning(self, "No Data", "Please load a CSV file first.")
             return
         
-        # Get all available channels from all imports (exclude math channels for input selection)
+        # Get all available channels from all imports (including math channels)
         all_channels = set()
         all_units = set()
         channel_units = {}  # Map channel name to unit
         for imp in self.imports:
             for ch in imp.channels_data.keys():
-                if ch not in self.math_channels:  # Don't allow math channels as inputs
-                    all_channels.add(ch)
-                    if ch not in channel_units and ch in imp.units:
-                        channel_units[ch] = imp.units[ch]
+                all_channels.add(ch)
+                if ch not in channel_units and ch in imp.units:
+                    channel_units[ch] = imp.units[ch]
             all_units.update(imp.units.values())
+        
+        # Build math channel dependency graph: {channel_name: set of input channel names}
+        math_channel_deps = {}
+        for name, data in self.math_channels.items():
+            deps = set()
+            if 'inputs' in data:
+                for label, ch in data['inputs'].items():
+                    if ch:
+                        deps.add(ch)
+            math_channel_deps[name] = deps
         
         # Get edit data if editing
         edit_data = None
         if edit_channel and edit_channel in self.math_channels:
             edit_data = {'name': edit_channel, **self.math_channels[edit_channel]}
         
-        dialog = MathChannelDialog(list(all_channels), list(all_units), channel_units, edit_data, self)
+        dialog = MathChannelDialog(list(all_channels), list(all_units), channel_units, 
+                                   math_channel_deps, edit_data, self)
         dialog.channel_created.connect(lambda n, e, inputs_json, u: self._create_math_channel_with_spinner(n, e, inputs_json, u, edit_channel))
         dialog.exec()
     
@@ -2079,6 +2097,7 @@ class OBD2MainWindow(QMainWindow):
     def _delete_saved_view(self, view_path: str):
         """Delete a single saved view."""
         from pathlib import Path
+        from .app_data import list_saved_views
         reply = QMessageBox.question(
             self, "Delete View",
             f"Are you sure you want to delete this saved view?",
@@ -2088,7 +2107,7 @@ class OBD2MainWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             try:
                 Path(view_path).unlink()
-                self._update_home_screen()
+                self.home_widget.update_saved_views(list_saved_views())
                 self.statusbar.showMessage("View deleted", 3000)
             except Exception as e:
                 QMessageBox.warning(self, "Error", f"Failed to delete view: {e}")
@@ -2115,5 +2134,5 @@ class OBD2MainWindow(QMainWindow):
                     deleted += 1
                 except Exception:
                     pass
-            self._update_home_screen()
+            self.home_widget.update_saved_views(list_saved_views())
             self.statusbar.showMessage(f"Deleted {deleted} views", 3000)
